@@ -194,7 +194,7 @@ jobs:
           curl -H "Content-Type: application/json" \
               -X POST \
               -d "{\"content\": \"❌ [AI 배포 실패] **${{ env.ENV }}** AI 서버 (브랜치: \`${{ env.BRANCH }}\`)\\n🔖 Commit: ${{ env.COMMIT_HASH }}\\n⚠️ [워크플로우 로그 보기]($WORKFLOW_URL)\"}" \
-              ${{ secrets.DISCORD_WEBHOOK_PR_URL }}
+              ${{ secrets.DISCORD_WEBHOOK_CICD_URL }}
 
       - name: Send success notification
         if: success()
@@ -202,7 +202,7 @@ jobs:
           curl -H "Content-Type: application/json" \
                -X POST \
                -d "{\"content\": \"🚀 [AI 배포 완료] **${{ env.ENV }}** AI 서버 (브랜치: \`${{ env.BRANCH }}\`)\\n🔖 Commit: ${{ env.COMMIT_HASH }}\"}" \
-               ${{ secrets.DISCORD_WEBHOOK_PR_URL }}
+               ${{ secrets.DISCORD_WEBHOOK_CICD_URL }}
   
   rollback:
     needs: ai-cd
@@ -271,7 +271,7 @@ jobs:
           curl -H "Content-Type: application/json" \
             -X POST \
             -d "{\"content\": \"✅ [AI 롤백 완료] \`${{ env.ENVIRONMENT }}\` 환경\"}" \
-            ${{ secrets.DISCORD_WEBHOOK_PR_URL }}
+            ${{ secrets.DISCORD_WEBHOOK_CICD_URL }}
 
       - name: Send failure notification
         if: failure()
@@ -279,4 +279,4 @@ jobs:
           curl -H "Content-Type: application/json" \
             -X POST \
             -d "{\"content\": \"❌ [AI 롤백 실패] \`${{ env.ENVIRONMENT }}\` 환경\"}" \
-            ${{ secrets.DISCORD_WEBHOOK_PR_URL }}
+            ${{ secrets.DISCORD_WEBHOOK_CICD_URL }}
