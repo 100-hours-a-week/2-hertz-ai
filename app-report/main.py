@@ -7,11 +7,12 @@
 
 import os
 
-from api.endpoints.tuning_report_router import TuningReportRouter
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import RedirectResponse
-from utils.error_handler import register_exception_handlers
+
+from .api.endpoints.tuning_report_router import TuningReportRouter
+from .utils.error_handler import register_exception_handlers
 
 # .env 파일에서 환경 변수 로드
 load_dotenv()

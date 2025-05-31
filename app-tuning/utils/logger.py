@@ -29,6 +29,7 @@ file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
 logger.setLevel(logging.INFO)
+logger.propagate = False  # 부모 로거로 메시지 전파 중단
 
 # 성능 지표 컬렉션 (간단한 인메모리 저장소)
 performance_metrics = {

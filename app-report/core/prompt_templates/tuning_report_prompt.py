@@ -1,6 +1,6 @@
 # 뉴스 생성 프롬프트 템플릿
 
-from schemas.tuning_schema import UserProfile
+from ...schemas.tuning_schema import UserProfile
 
 
 def build_prompt(category: str, userA: UserProfile, userB: UserProfile) -> str:

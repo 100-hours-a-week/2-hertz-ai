@@ -8,19 +8,21 @@ from utils import logger
 
 # 유사도 데이터를 가져오고 파싱하는 함수
 async def fetch_user_similarities(user_id: str) -> dict[str, float]:
-    sim_data = await get_user_similarities(user_id)
+    user_similarities = await get_user_similarities(user_id)
 
     # 유사도 데이터가 없으면 404 에러 반환
-    if not sim_data or not sim_data.get("metadatas"):
+    if not user_similarities or not user_similarities.get("metadatas"):
         raise HTTPException(
             status_code=404, detail={"code": "TUNING_NOT_FOUND_USER", "data": None}
         )
     try:
         # similarities 필드에서 JSON 문자열을 딕셔너리로 파싱
-        sim_map = json.loads(sim_data["metadatas"][0].get("similarities", "{}"))
+        similarity_map = json.loads(
+            user_similarities["metadatas"][0].get("similarities", "{}")
+        )
 
         # 문자열 userId → float 유사도 점수 형태로 변환
-        return {str(k): float(v) for k, v in sim_map.items()}
+        return {str(k): float(v) for k, v in similarity_map.items()}
     except (ValueError, TypeError, json.JSONDecodeError) as e:
         raise HTTPException(
             status_code=500,

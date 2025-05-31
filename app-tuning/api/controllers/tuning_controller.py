@@ -6,13 +6,13 @@
 import logging
 
 from fastapi import HTTPException
-from schemas.tuning_schema import TuningResponse
+from schemas.tuning_schema import TuningMatchingList, TuningResponse
 from services.tuning_service import get_matching_users
 
 logger = logging.getLogger(__name__)
 
 
-async def get_tuning_matches(user_id: str) -> TuningResponse:
+async def get_tuning_matches(user_id: int) -> TuningResponse:
     """
     사용자 ID를 기반으로 매칭 추천을 제공하는 컨트롤러 함수
 
@@ -25,6 +25,7 @@ async def get_tuning_matches(user_id: str) -> TuningResponse:
     Raises:
         HTTPException: 오류 발생 시 적절한 상태 코드와 메시지를 포함한 예외 발생
     """
+    user_id = str(user_id)
     try:
         result = await get_matching_users(user_id)
 
@@ -37,12 +38,11 @@ async def get_tuning_matches(user_id: str) -> TuningResponse:
         print(f"Error in tuning controller: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail={"code": "TUNING_INTERNAL_SERVER_ERROR", "data": None},
+            detail=TuningResponse(
+                code="TUNING_INTERNAL_SERVER_ERROR", data=None
+            ).model_dump(),
         )
 
-    return {
-        "code": "TUNING_SUCCESS",
-        "data": {
-            "userIdList": result,
-        },
-    }
+    return TuningResponse(
+        code="TUNING_SUCCESS", data=TuningMatchingList(userIdList=result)
+    )
