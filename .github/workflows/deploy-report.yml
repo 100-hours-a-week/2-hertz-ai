@@ -5,6 +5,7 @@ on:
     types: [closed]
     branches:
       - develop
+      - main
     paths:
       - 'app-report/**'
       - '.github/workflows/deploy-report.yml'
@@ -146,7 +147,7 @@ jobs:
           curl -H "Content-Type: application/json" \
               -X POST \
               -d "{\"content\": \"❌ [AI 배포 실패] **${{ env.ENV }}** AI 서버 (브랜치: \`${{ env.BRANCH }}\`)\\n🔖 Commit: ${{ env.COMMIT_HASH }}\\n⚠️ [워크플로우 로그 보기]($WORKFLOW_URL)\"}" \
-              ${{ env.DISCORD_WEBHOOK_CICD_URL }}
+              ${{ secrets.DISCORD_WEBHOOK_CICD_URL }}
 
       - name: Send success notification
         if: success()
@@ -154,7 +155,7 @@ jobs:
           curl -H "Content-Type: application/json" \
                -X POST \
                -d "{\"content\": \"🚀 [AI 배포 완료] **${{ env.ENV }}** AI 서버 (브랜치: \`${{ env.BRANCH }}\`)\\n🔖 Commit: ${{ env.COMMIT_HASH }}\"}" \
-                ${{ env.DISCORD_WEBHOOK_CICD_URL }}
+                ${{ secrets.DISCORD_WEBHOOK_CICD_URL }}
 
   rollback:
     needs: ai-cd
@@ -263,12 +264,11 @@ jobs:
           curl -H "Content-Type: application/json" \
             -X POST \
             -d "{\"content\": \"✅ [AI 롤백 완료] \`${{ env.ENVIRONMENT }}\` 환경\"}" \
-            ${{ env.DISCORD_WEBHOOK_CICD_URL }}
-
+            ${{ secrets.DISCORD_WEBHOOK_CICD_URL }}
       - name: Send failure notification
         if: failure()
         run: |
           curl -H "Content-Type: application/json" \
             -X POST \
             -d "{\"content\": \"❌ [AI 롤백 실패] \`${{ env.ENVIRONMENT }}\` 환경\"}" \
-            ${{ env.DISCORD_WEBHOOK_CICD_URL }}
+            ${{ secrets.DISCORD_WEBHOOK_CICD_URL }}
