@@ -81,7 +81,7 @@ jobs:
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v1
         with:
-          credentials_json: ${{ secrets.GPU_GCP_SA_KEY }}
+          credentials_json: ${{ env.SA_KEY }}
 
       - name: Setup gcloud CLI
         uses: google-github-actions/setup-gcloud@v1
@@ -221,7 +221,7 @@ jobs:
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v1
         with:
-          credentials_json: ${{ secrets.GPU_GCP_SA_KEY }}
+          credentials_json: ${{ env.SA_KEY }}
 
       - name: Send rollback start notification
         run: |
