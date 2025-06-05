@@ -9,7 +9,7 @@ from fastapi import APIRouter, Body, Path
 from schemas.user_schema import BaseResponse, EmbeddingRegister
 
 
-class UserPostRouter:
+class UserRouter:
     """
     사용자 등록 및 사용자 관련 엔드포인트를 처리하는 라우터 클래스
     사용자 관련 API 경로 정의

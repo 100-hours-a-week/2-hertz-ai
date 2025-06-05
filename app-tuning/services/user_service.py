@@ -1,7 +1,4 @@
-# users_post_service.py
-
 import json
-import time
 
 import numpy as np
 
@@ -271,8 +268,8 @@ def check_duplicate_user(user_id: str) -> None:
 
 # 신규 유저 등록과 매칭 스코어 계산 처리 통합 로직
 @logger.log_performance(operation_name="register_user", include_memory=True)
-async def register_user(user: EmbeddingRegister) -> dict:
-    start_time = time.time()
+async def register_user(user: EmbeddingRegister) -> None:
+    # start_time = time.time()
 
     try:
         user_id = str(user.userId)
@@ -322,7 +319,7 @@ async def register_user(user: EmbeddingRegister) -> dict:
         )
 
     try:
-        similarity_result = update_similarity_for_users(user_id)
+        update_similarity_for_users(user_id)
     except Exception as e:
         print(f"[ SIMILARITY ERROR] 유사도 처리 실패: {e}")
         raise HTTPException(
@@ -333,14 +330,13 @@ async def register_user(user: EmbeddingRegister) -> dict:
             },
         )
 
-    elapsed = round(time.time() - start_time, 3)
+    # elapsed = round(time.time() - start_time, 3)
 
-    return {
-        "status": "registered",
-        "userId": user_id,
-        "matchedUserCount": similarity_result.get("updated_similarities", 0),
-        "time_taken_seconds": elapsed,
-    }
+    # return {
+    # "status": "registered",
+    # "userId": user_id,
+    # "matchedUserCount": similarity_result.get("updated_similarities", 0),
+    # "time_taken_seconds": elapsed}
 
 
 # 전체 유저와의 매칭 스코어 계산 및 저장

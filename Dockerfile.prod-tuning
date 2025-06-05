@@ -1,0 +1,20 @@
+# Dockerfile.prod
+ARG BASE_IMAGE_URI
+FROM ${BASE_IMAGE_URI}
+
+WORKDIR /app
+# 3. requirements만 먼저 복사 (캐시를 최대한 활용)
+COPY ./app-tuning/requirements-prod.txt /app/requirements-prod.txt
+
+# 4. 의존성 설치 (requirements.txt가 변하지 않으면 캐시 사용!)
+RUN pip install --no-cache-dir -r /app/requirements-prod.txt
+# 환경 변수 (필요한 경우 재정의)
+ENV PYTHONPATH=/app
+ENV ENVIRONMENT=prod
+ENV CHROMA_MODE=server
+ENV CHROMA_HOST=host.docker.internal
+ENV CHROMA_PORT=8001
+ENV ALLOW_RESET=false
+
+EXPOSE 8000
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

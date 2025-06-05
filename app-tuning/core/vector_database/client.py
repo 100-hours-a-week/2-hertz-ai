@@ -2,17 +2,17 @@ import logging
 import os
 
 import chromadb
-from fastapi import HTTPException
 
 chroma_client = None
 
 
 def is_client_alive(client):
     try:
-        client.list_collections()
+        client.list_collections()  # 헬스체크
         return True
     except Exception as e:
         logging.warning(f"[Chroma] 클라이언트 응답 없음: {e}")
+        print(f"ChromaDB 클라이언트 헬스체크 실패: {e}")
         return False
 
 
@@ -26,22 +26,22 @@ def get_chroma_client():
         chroma_client = None  # 죽은 연결 무효화
 
     try:
-        mode = os.getenv("CHROMA_MODE", "server")  # local 또는 server
+        mode = os.getenv("CHROMA_MODE", "server")
 
         if mode == "local":
-            print("🔗 CHROMA MODE = local")
-            chroma_path = os.getenv("CHROMA_PATH")
-            if not chroma_path:
-                raise RuntimeError("CHROMA_PATH 환경변수가 설정되지 않았습니다.")
-
+            # 로컬 PersistentClient 사용
+            base_dir = os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            )
+            chroma_path = os.path.join(base_dir, "chroma_db")
             chroma_client = chromadb.PersistentClient(path=chroma_path)
         else:
-            host = (
-                os.getenv("CHROMA_HOST", "localhost")
-                .replace("http://", "")
-                .replace("https://", "")
-            )
+            # 서버 모드 (기본)
+            host = os.getenv("CHROMA_HOST", "localhost")
             port = int(os.getenv("CHROMA_PORT", "8001"))
+
+            host = host.replace("http://", "").replace("https://", "")
+
             chroma_client = chromadb.HttpClient(host=host, port=port)
 
         if not is_client_alive(chroma_client):
@@ -49,11 +49,7 @@ def get_chroma_client():
             raise RuntimeError("ChromaDB 클라이언트가 연결되었지만 응답이 없습니다.")
 
         return chroma_client
-
     except Exception as e:
         logging.exception(f"[Chroma] 클라이언트 초기화 실패: {e}")
         chroma_client = None
-        raise HTTPException(
-            status_code=503,
-            detail="ChromaDB 연결 실패: 서비스가 일시적으로 사용할 수 없습니다.",
-        )
+        return None
