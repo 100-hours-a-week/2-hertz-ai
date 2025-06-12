@@ -44,6 +44,7 @@ class UserProfile(BaseModel):
     사용자 프로필 모델 (튜닝 리포트 생성용)
     """
 
+    gender: str = Field(..., description="성별")
     MBTI: str = Field(..., description="MBTI 분류")
     religion: str = Field(..., description="종교")
     smoking: str = Field(..., description="흡연 정도")
@@ -60,6 +61,7 @@ class UserProfile(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
+                "gender": "MALE",
                 "MBTI": "ISTJ",
                 "religion": "NON_RELIGIOUS",
                 "smoking": "NO_SMOKING",
@@ -82,6 +84,7 @@ class TuningReport(BaseModel):
     """
 
     category: str = Field(..., description="매칭 유형")
+    chatCount: int = Field(..., description="채팅 횟수")
     userA: UserProfile = Field(..., description="첫 번째 사용자 프로필")
     userB: UserProfile = Field(..., description="두 번째 사용자 프로필")
 
@@ -89,7 +92,9 @@ class TuningReport(BaseModel):
         json_schema_extra = {
             "example": {
                 "category": "FRIEND",
+                "chatCount": 85,
                 "userA": {
+                    "gender": "MALE",
                     "MBTI": "ISTJ",
                     "religion": "NON_RELIGIOUS",
                     "smoking": "NO_SMOKING",
@@ -104,6 +109,7 @@ class TuningReport(BaseModel):
                     "hobbies": ["GAMING", "MUSIC"],
                 },
                 "userB": {
+                    "gender": "FEMALE",
                     "MBTI": "ENFP",
                     "religion": "CHRISTIANITY",
                     "smoking": "SOMETIMES",

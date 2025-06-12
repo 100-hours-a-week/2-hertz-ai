@@ -30,7 +30,10 @@ class TuningRouter:
         )
 
     async def get_tuning(
-        self, userId: int = Query(..., description="매칭할 사용자의 ID", gt=0)
+        self,
+        user_id: int = Query(
+            ..., alias="userId", description="매칭할 사용자의 ID", gt=0
+        ),
     ) -> TuningResponse:
         """
         사용자 ID 기반 매칭 추천 제공
@@ -55,4 +58,4 @@ class TuningRouter:
         }
         ```
         """
-        return await tuning_controller.get_tuning_matches(userId)
+        return await tuning_controller.get_tuning_matches(user_id)

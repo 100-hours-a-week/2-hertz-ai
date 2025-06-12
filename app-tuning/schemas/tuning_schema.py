@@ -8,6 +8,10 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class TuningMatchingList(BaseModel):
+    userIdList: List[int]
+
+
 class TuningMatching(BaseModel):
     """
     튜닝(매칭) id 리스트 모델
@@ -21,7 +25,9 @@ class TuningMatching(BaseModel):
 
 class TuningResponse(BaseModel):
     code: str = Field(..., description="응답 코드 (매칭 성공 여부)")
-    data: Optional[TuningMatching] = Field(None, description="매칭된 사용자 ID 목록")
+    data: Optional[TuningMatchingList] = Field(
+        None, description="매칭된 사용자 ID 목록"
+    )
 
     """
     튜닝(매칭) 응답 모델
@@ -116,26 +122,6 @@ class TuningReport(BaseModel):
                     "pets": ["WANT_TO_HAVE"],
                     "selfDevelopment": ["READING", "DIET"],
                     "hobbies": ["OUTDOOR", "MUSIC", "INSTRUMENT"],
-                },
-            }
-        }
-
-
-class TuningReportResponse(BaseModel):
-    """
-    튜닝 리포트 생성 응답 모델
-    """
-
-    code: str = Field(..., description="응답 코드")
-    data: dict[str, str] = Field(..., description="생성된 튜닝 리포트")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "code": "TUNING_REPORT_SUCCESS",
-                "data": {
-                    "title": "📢 [속보] 누가 누구랑? 이번 주 새롭게 연결된 인연 공개!",
-                    "content": "이번 주, 새로운 연결이 성사되었습니다!\n\n하지만… 누군지 바로 알려드릴 순 없죠😉\n\n지금부터 공개되는 힌트 3가지, 눈 크게 뜨고 확인하세요!",
                 },
             }
         }

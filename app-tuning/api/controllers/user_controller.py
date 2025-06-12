@@ -4,7 +4,6 @@
 """
 
 import logging
-from typing import Dict
 
 from core.vector_database import list_similarities, list_users, reset_collections
 from fastapi import HTTPException
@@ -43,7 +42,7 @@ async def db_reset_data():
     return BaseResponse(status="success", code="CHROMADB_RESET_SUCCESS")
 
 
-async def create_user(user_data: EmbeddingRegister) -> Dict:
+async def create_user(user_data: EmbeddingRegister) -> BaseResponse:
     """
     새 사용자를 등록하고 임베딩 벡터를 생성하는 컨트롤러 함수
 
@@ -57,8 +56,8 @@ async def create_user(user_data: EmbeddingRegister) -> Dict:
         HTTPException: 오류 발생 시 적절한 상태 코드와 메시지를 포함한 예외 발생
     """
     try:
-        result = await register_user(user_data)
-        return {"code": "EMBEDDING_REGISTER_SUCCESS", "data": result}
+        await register_user(user_data)
+        return BaseResponse(code="EMBEDDING_REGISTER_SUCCESS", data=None)
     except HTTPException as http_ex:
         logger.warning(f"[REGISTER_USER_HTTP_ERROR] {http_ex.detail}")
         raise
@@ -68,38 +67,36 @@ async def create_user(user_data: EmbeddingRegister) -> Dict:
         )  # 자동 traceback 포함
         raise HTTPException(
             status_code=500,
-            detail={
-                "code": "EMBEDDING_REGISTER_SERVER_ERROR",
-                "data": None,
-            },
+            detail=BaseResponse(
+                code="EMBEDDING_REGISTER_SERVER_ERROR", data=None
+            ).model_dump(),
         )
 
 
-async def delete_user_data(user_data: EmbeddingRegister) -> Dict:
+async def delete_user_data(user_id: int) -> BaseResponse:
     """
-    새 사용자를 등록하고 임베딩 벡터를 생성하는 컨트롤러 함수
+    사용자 데이터를 삭제하는 컨트롤러 함수
 
     Args:
-        user_data: 사용자 등록 데이터 (Pydantic 모델)
+        user_id (int): 삭제할 사용자의 ID
 
     Returns:
-        Dictionary containing the response code and result
+        dict: 응답 코드와 결과 데이터를 포함한 딕셔너리
 
     Raises:
-        HTTPException: 오류 발생 시 적절한 상태 코드와 메시지를 포함한 예외 발생
+        HTTPException: 사용자 데이터가 없거나 서버 오류가 발생한 경우
     """
     try:
-        result = delete_user_metatdata(user_data)
-        return result
+        delete_user_metatdata(user_id)
+        return BaseResponse(code="EMBEDDING_DELETE_SUCCESS", data=None)
     except HTTPException as http_ex:
         logger.warning(f"[EMBEDDING_DELETE_HTTP_ERROR] {http_ex.detail}")
         raise
     except Exception as e:
-        logger.exception(f"[EMBEDDING_DELETE_FATAL_ERROR]: {str(e)}")  # 자동 traceback
+        logger.exception(f"[EMBEDDING_DELETE_FATAL_ERROR]: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail={
-                "code": "EMBEDDING_DELETE_SERVER_ERROR",
-                "data": None,
-            },
+            detail=BaseResponse(
+                code="EMBEDDING_DELETE_SERVER_ERROR", data=None
+            ).model_dump(),
         )
