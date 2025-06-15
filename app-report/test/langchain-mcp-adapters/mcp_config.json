@@ -1,0 +1,17 @@
+{
+    "mcpServers": {
+        "tavily-mcp": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@smithery/cli@latest",
+                "run",
+                "@tavily-ai/tavily-mcp",
+                "--key",
+                "537dd186-961a-4463-a775-f5b785b33edf",
+                "--profile",
+                "tiny-baker-hJegrV"
+            ]
+        }
+    }
+}

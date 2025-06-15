@@ -7,7 +7,8 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from utils.logger import logger
+
+from ..utils.logger import logger
 
 
 def register_exception_handlers(app: FastAPI) -> None:

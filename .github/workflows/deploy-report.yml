@@ -1,0 +1,309 @@
+name: Tuning Report CI/CD
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - develop
+      - main
+    paths:
+      - 'app-report/**'
+      - '.github/workflows/deploy-report.yml'
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "배포 환경 선택"
+        required: true
+        default: "develop"
+        type: choice
+        options:
+          - develop
+          - main
+
+jobs:
+  ai-cd:
+    runs-on: ubuntu-latest
+    outputs:
+      DISCORD_WEBHOOK_CICD_URL: ${{ steps.ssm.outputs.DISCORD_WEBHOOK_CICD_URL }}
+      HOST: ${{ steps.ssm.outputs.HOST }}
+      INSTANCE: ${{ steps.ssm.outputs.INSTANCE }}
+      PROJECT_ID: ${{ steps.ssm.outputs.PROJECT_ID }}
+      ZONE: ${{ steps.ssm.outputs.ZONE }}
+      SSH_USERNAME: ${{ steps.ssm.outputs.SSH_USERNAME }}
+    steps:
+
+      # 1. AWS 인증 (ECR 및 SSM 접근)
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      - name: Set environment variables from SSM
+        id: ssm
+        run: |
+          load_param() {
+            VALUE=$(aws ssm get-parameter --name "$1" --with-decryption --query "Parameter.Value" --output text)
+            echo "::add-mask::$VALUE"
+            echo "$2=$VALUE" >> $GITHUB_ENV
+            echo "$2=$VALUE" >> $GITHUB_OUTPUT
+          }
+          load_secret_to_file() {
+            VALUE=$(aws ssm get-parameter --name "$1" --with-decryption --output json | jq -r .Parameter.Value)
+            echo "$VALUE" | while IFS= read -r line; do echo "::add-mask::$line"; done
+            echo "$VALUE" > "$2"
+          }
+          BRANCH="${{ github.ref_name }}"
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
+          if [[ "$BRANCH" == "main" ]]; then
+            echo "ENV=production" >> $GITHUB_ENV
+          elif [[ "$BRANCH" == "develop" ]]; then
+            echo "ENV=develop" >> $GITHUB_ENV
+          else
+            echo "ENV=develop" >> $GITHUB_ENV
+          fi
+          load_param "/global/gcp/DISCORD_WEBHOOK_CICD_URL" DISCORD_WEBHOOK_CICD_URL
+          load_param "/global/gcp/GPU_HOST" HOST
+          load_param "/global/gcp/GPU_INSTANCE" INSTANCE
+          load_param "/global/gcp/GPU_PROJECT_ID" PROJECT_ID
+          load_param "/global/gcp/GPU_ZONE" ZONE
+          load_secret_to_file "/global/gcp/GPU_SA_KEY" gcp-sa-key.json
+
+          echo "SA_KEY<<EOF" >> $GITHUB_ENV
+          cat gcp-sa-key.json >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          load_param "/global/gcp/SSH_USERNAME" SSH_USERNAME
+          load_secret_to_file "/global/gcp/SSH_PRIVATE_KEY" id_rsa
+          chmod 600 id_rsa
+          echo "SSH_KEY_PATH=id_rsa" >> $GITHUB_ENV
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ env.SA_KEY }}
+
+      - name: Setup gcloud CLI
+        uses: google-github-actions/setup-gcloud@v1
+
+      
+      - name: Check instance status
+        id: check_instance
+        run: |
+          echo "⚡ 인스턴스 상태 확인 중: $INSTANCE (zone: $ZONE)"
+          STATUS=$(gcloud compute instances describe "$INSTANCE" --zone="$ZONE" --format='get(status)')
+          echo "🔎 현재 상태: $STATUS"
+
+          if [[ "$STATUS" == "RUNNING" ]]; then
+            echo "continue=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "🛑 인스턴스가 실행 중이 아닙니다. CD 중단."
+            echo "continue=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy via SSH
+        if: steps.check_instance.outputs.continue == 'true'
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ env.HOST }}
+          username: ${{ env.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/deploy
+            chmod +x ai_deploy.sh
+            ./ai_deploy.sh --branch ${{ env.BRANCH }}
+
+      - name: Wait for FastAPI to start
+        if: steps.check_instance.outputs.continue == 'true'
+        run: |
+          echo "🕒 FastAPI 서버 기동 대기 중..."
+          sleep 60
+
+      - name: Health check with retries vllm
+        if: steps.check_instance.outputs.continue == 'true'
+        run: |
+          echo "🔍 vllm 서버 헬스체크 시작 (FastAPI docs)... 최대 3회 시도합니다."
+          for i in {1..5}; do
+            echo "⏱️ 시도 $i: http://${{ env.HOST }}:8001/ping"
+            if curl -sf http://${{ env.HOST }}:8001/ping; then
+              echo "✅ 헬스체크 성공 🎉"
+              exit 0
+            else
+              echo "⚠️ 헬스체크 실패. 60초 후 재시도..."
+              sleep 60
+            fi
+          done
+
+          echo "::error::❌ 5회 헬스체크 실패 - 서버가 정상 기동되지 않음"
+          exit 1
+      - name: Health check with retries
+        if: steps.check_instance.outputs.continue == 'true'
+        run: |
+            echo "🔍 GPU 서버 헬스체크 시작 (FastAPI docs)... 최대 3회 시도합니다."
+            for i in {1..10}; do
+              echo "⏱️ 시도 $i: http://${{ env.HOST }}:8000/docs"
+              if curl -sf http://${{ env.HOST }}:8000/docs; then
+                echo "✅ 헬스체크 성공 🎉"
+                exit 0
+              else
+                echo "⚠️ 헬스체크 실패. 10초 후 재시도..."
+                sleep 10
+              fi
+            done
+  
+            echo "::error::❌ 10회 헬스체크 실패 - 서버가 정상 기동되지 않음"
+            exit 1
+
+      - name: Send failure notification
+        if: failure()
+        run: |
+          WORKFLOW_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -H "Content-Type: application/json" \
+              -X POST \
+              -d "{\"content\": \"❌ [GPU 배포 실패] **${{ env.ENV }}** GPU 서버 (브랜치: \`${{ env.BRANCH }}\`)\\n🔖 Commit: ${{ env.COMMIT_HASH }}\\n⚠️ [워크플로우 로그 보기]($WORKFLOW_URL)\"}" \
+              ${{ secrets.DISCORD_WEBHOOK_CICD_URL }}
+
+      - name: Send success notification
+        if: success()
+        run: |
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d "{\"content\": \"🚀 [GPU 배포 완료] **${{ env.ENV }}** GPU 서버 (브랜치: \`${{ env.BRANCH }}\`)\\n🔖 Commit: ${{ env.COMMIT_HASH }}\"}" \
+                ${{ secrets.DISCORD_WEBHOOK_CICD_URL }}
+
+  rollback:
+    needs: ai-cd
+    if: always() && needs.ai-cd.result != 'success'
+    runs-on: ubuntu-latest
+    steps:
+
+    # 1. AWS 인증 (ECR 및 SSM 접근)
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      - name: Set environment variables from SSM
+        id: ssm
+        run: |
+          load_param() {
+            VALUE=$(aws ssm get-parameter --name "$1" --with-decryption --query "Parameter.Value" --output text)
+            echo "::add-mask::$VALUE"
+            echo "$2=$VALUE" >> $GITHUB_ENV
+            echo "$2=$VALUE" >> $GITHUB_OUTPUT
+          }
+          load_secret_to_file() {
+            VALUE=$(aws ssm get-parameter --name "$1" --with-decryption --output json | jq -r .Parameter.Value)
+            echo "$VALUE" | while IFS= read -r line; do echo "::add-mask::$line"; done
+            echo "$VALUE" > "$2"
+          }
+          BRANCH="${{ github.ref_name }}"
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
+          if [[ "$BRANCH" == "main" ]]; then
+            echo "ENV=production" >> $GITHUB_ENV
+          elif [[ "$BRANCH" == "develop" ]]; then
+            echo "ENV=develop" >> $GITHUB_ENV
+          else
+            echo "ENV=develop" >> $GITHUB_ENV
+          fi
+          load_param "/global/gcp/DISCORD_WEBHOOK_CICD_URL" DISCORD_WEBHOOK_CICD_URL
+          load_param "/global/gcp/GPU_HOST" HOST
+          load_param "/global/gcp/GPU_INSTANCE" INSTANCE
+          load_param "/global/gcp/GPU_PROJECT_ID" PROJECT_ID
+          load_param "/global/gcp/GPU_ZONE" ZONE
+          load_secret_to_file "/global/gcp/GPU_SA_KEY" gcp-sa-key.json
+
+          echo "SA_KEY<<EOF" >> $GITHUB_ENV
+          cat gcp-sa-key.json >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          load_param "/global/gcp/SSH_USERNAME" SSH_USERNAME
+          load_secret_to_file "/global/gcp/SSH_PRIVATE_KEY" id_rsa
+          chmod 600 id_rsa
+          echo "SSH_KEY_PATH=id_rsa" >> $GITHUB_ENV
+
+      - name: Set environment variables
+        run: |
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "ENVIRONMENT=production" >> $GITHUB_ENV
+          else
+            echo "ENVIRONMENT=develop" >> $GITHUB_ENV
+          fi
+        
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ env.SA_KEY }}
+
+      - name: Send rollback start notification
+        run: |
+          curl -H "Content-Type: application/json" \
+            -X POST \
+            -d "{\"content\": \"🔄 [GPU 롤백 시작] \`${{ env.ENVIRONMENT }}\` 환경에서 롤백을 실행합니다.\"}" \
+            ${{ env.DISCORD_WEBHOOK_CICD_URL }}
+
+      - name: SSH into server and rollback
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ env.HOST }}
+          username: ${{ needs.ai-cd.outputs.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/deploy
+            ./ai_deploy.sh --rollback || exit 1
+      
+      - name: Wait for FastAPI to start
+        run: |
+              echo "🕒 FastAPI 서버 기동 대기 중..."
+              sleep 60
+
+      - name: Health check with retries vllm
+        run: |
+          echo "🔍 AI 서버 헬스체크 시작 ... 최대 3회 시도합니다."
+          for i in {1..5}; do
+            echo "⏱️ 시도 $i: http://${{ env.HOST }}:8001/ping"
+            if curl -sf http://${{ env.HOST }}:8001/ping; then
+              echo "✅ 헬스체크 성공 🎉"
+              exit 0
+            else
+              echo "⚠️ 헬스체크 실패. 60초 후 재시도..."
+              sleep 60
+            fi
+          done
+
+          echo "::error::❌ 5회 헬스체크 실패 - 서버가 정상 기동되지 않음"
+          exit 1
+      - name: Health check with retries
+        run: |
+            echo "🔍 AI 서버 헬스체크 시작 ... 최대 3회 시도합니다."
+            for i in {1..5}; do
+              echo "⏱️ 시도 $i: http://${{ env.HOST }}:8000/docs"
+              if curl -sf http://${{ env.HOST }}:8000/docs; then
+                echo "✅ 헬스체크 성공 🎉"
+                exit 0
+              else
+                echo "⚠️ 헬스체크 실패. 10초 후 재시도..."
+                sleep 10
+              fi
+            done
+  
+            echo "::error::❌ 5회 헬스체크 실패 - 서버가 정상 기동되지 않음"
+            exit 1
+      - name: Send success notification
+        if: success()
+        run: |
+          curl -H "Content-Type: application/json" \
+            -X POST \
+            -d "{\"content\": \"✅ [GPU 롤백 완료] \`${{ env.ENVIRONMENT }}\` 환경\"}" \
+            ${{ secrets.DISCORD_WEBHOOK_CICD_URL }}
+      - name: Send failure notification
+        if: failure()
+        run: |
+          curl -H "Content-Type: application/json" \
+            -X POST \
+            -d "{\"content\": \"❌ [GPU 롤백 실패] \`${{ env.ENVIRONMENT }}\` 환경\"}" \
+            ${{ secrets.DISCORD_WEBHOOK_CICD_URL }}

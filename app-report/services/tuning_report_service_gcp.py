@@ -5,9 +5,9 @@ import logging
 import re
 from typing import Dict, Union
 
-from app.core.prompt_templates.tuning_report_prompt import build_prompt
-from app.models import qwen_loader
-from app.schemas.tuning_schema import TuningReport, TuningReportResponse
+from core.prompt_templates.tuning_report_prompt import build_prompt
+from models import qwen_loader
+from schemas.tuning_schema import TuningReport, TuningReportResponse
 
 logger = logging.getLogger(__name__)
 
