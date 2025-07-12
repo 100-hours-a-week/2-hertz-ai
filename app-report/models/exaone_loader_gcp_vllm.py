@@ -1,10 +1,11 @@
 import time
 
 import GPUtil
+from langchain_openai import ChatOpenAI
 
 # from dotenv import load_dotenv
 # from langchain_community.llms import VLLM
-from langchain_openai import ChatOpenAI
+from vllm import LLM
 
 from ..utils.logger import log_performance, logger
 
@@ -17,10 +18,10 @@ def get_vram_usage():
 
 
 # 모듈 임포트 시점에 바로 모델 초기화
-@log_performance(operation_name="load_vllm_model", include_memory=True)
+@log_performance(operation_name="load_exaone_model", include_memory=True)
 def _load_model():
     """
-    VLLM Qwen2-7B-Instruct 모델을 로딩합니다.
+    VLLM EXAONE-3.5-7.8B-Instruct 모델을 로딩합니다.
     """
 
     try:
@@ -30,7 +31,7 @@ def _load_model():
         gpu_mem_before = get_vram_usage()
         # 모델 로드
         inference_server_url = "http://localhost:8001/v1"
-        model_name = "Qwen/Qwen2.5-7B-Instruct"
+        model_name = "LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct"
         loaded_model = ChatOpenAI(
             model=model_name,
             openai_api_key="EMPTY",
@@ -61,9 +62,9 @@ model = _load_model()
 # 모델 인스턴스에 접근하기 위한 간단한 함수
 def get_model():
     """
-    초기화된 Qwen 모델 인스턴스 반환
+    초기화된 Midm 모델 인스턴스 반환
 
     Returns:
-        Qwen: 초기화된 Qwen 모델 인스턴스
+        Midm: 초기화된 모델 인스턴스
     """
     return model
