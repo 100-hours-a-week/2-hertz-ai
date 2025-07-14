@@ -187,6 +187,7 @@ jobs:
             load_param "/global/gcp/PROD_GCP_INSTANCE_AI" INSTANCE
             load_param "/global/gcp/PROD_GCP_PROJECT_ID" PROJECT_ID
             load_param "/global/gcp/PROD_GCP_ZONE" ZONE
+            load_param "/global/gcp/prod/TUNING_AI_MODEL_NAME" MODEL_NAME
             load_secret_to_file "/global/gcp/PROD_GCP_SA_KEY" gcp-sa-key.json
           elif [[ "$BRANCH" == "develop" ]]; then
             echo "ENV=develop" >> $GITHUB_ENV
@@ -194,6 +195,7 @@ jobs:
             load_param "/global/gcp/DEV_GCP_INSTANCE_AI" INSTANCE
             load_param "/global/gcp/DEV_GCP_PROJECT_ID" PROJECT_ID
             load_param "/global/gcp/DEV_GCP_ZONE" ZONE
+            load_param "/global/gcp/dev/TUNING_AI_MODEL_NAME" MODEL_NAME
             load_secret_to_file "/global/gcp/DEV_GCP_SA_KEY" gcp-sa-key.json
           else
             echo "ENV=develop" >> $GITHUB_ENV
@@ -201,6 +203,7 @@ jobs:
             load_param "/global/gcp/DEV_GCP_INSTANCE_AI_TEST" INSTANCE
             load_param "/global/gcp/DEV_GCP_PROJECT_ID" PROJECT_ID
             load_param "/global/gcp/DEV_GCP_ZONE_TEST" ZONE
+            load_param "/global/gcp/dev/TUNING_AI_MODEL_NAME" MODEL_NAME
             load_secret_to_file "/global/gcp/DEV_GCP_SA_KEY" gcp-sa-key.json
           fi
           echo "SA_KEY<<EOF" >> $GITHUB_ENV
@@ -258,7 +261,7 @@ jobs:
           host: ${{ env.HOST }}
           username: ${{ env.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: ENV,FULL_IMAGE,IMAGE_TAG,AWS_REGION,ECR_REGISTRY,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY
+          envs: ENV,FULL_IMAGE,IMAGE_TAG,AWS_REGION,ECR_REGISTRY,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,MODEL_NAME
           script: |
             # 필수 도구 (aws-cli, python3-pip) 설치 확인 및 설치
             if ! command -v aws &> /dev/null || ! command -v pip3 &> /dev/null; then
@@ -273,6 +276,7 @@ jobs:
             echo "FULL_IMAGE: $FULL_IMAGE"
             echo "AWS_REGION: $AWS_REGION"
             echo "ECR_REGISTRY: $ECR_REGISTRY"
+            echo "MODEL_NAME: $MODEL_NAME"
             echo "========================"
             cd /home/deploy
 
@@ -323,8 +327,7 @@ jobs:
 
             # 기존 컨테이너 중지/삭제 후 최신 이미지로 실행
 
-
-            if [ ! -d "/home/deploy/models/jhgan-ko-sbert-nli" ]; then
+            if [ ! -d "/home/deploy/models/${{ env.MODEL_NAME }}" ]; then
               echo "모델 디렉토리가 없습니다. 모델을 먼저 다운로드합니다."
               docker compose run --rm tuning-api python scripts/download_model.py
             else
