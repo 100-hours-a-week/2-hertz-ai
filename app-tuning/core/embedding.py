@@ -2,7 +2,47 @@
 from typing import List
 
 from models.sbert_loader import get_model
-from utils import logger
+from utils.logger import log_performance, logger
+
+
+def user_data_to_sentence(meta: dict) -> str:
+    # 제외 필드
+    exclude_fields = {"MBTI", "gender", "emailDomain", "ageGroup"}
+    # 각 필드별 템플릿
+    templates = {
+        "hobbies": lambda v: f"나의 취미는 {', '.join(v)}입니다." if v else "",
+        "currentInterests": lambda v: (
+            f"요즘 관심사는 {', '.join(v)}입니다." if v else ""
+        ),
+        "favoriteFoods": lambda v: (
+            f"좋아하는 음식은 {', '.join(v)}입니다." if v else ""
+        ),
+        "likedSports": lambda v: (
+            f"즐겨하는 스포츠는 {', '.join(v)}입니다." if v else ""
+        ),
+        "pets": lambda v: f"함께 사는 반려동물은 {', '.join(v)}입니다." if v else "",
+        "selfDevelopment": lambda v: (
+            f"자기계발 활동으로는 {', '.join(v)}을 하고 있습니다." if v else ""
+        ),
+        "personality": lambda v: f"저는 {', '.join(v)}한 성격입니다." if v else "",
+        "preferredPeople": lambda v: (
+            f"선호하는 사람 유형은 {', '.join(v)}입니다." if v else ""
+        ),
+        "religion": lambda v: f"종교는 {v[0]}입니다." if v else "",
+        "smoking": lambda v: f"흡연 여부는 {v[0]}입니다." if v else "",
+        "drinking": lambda v: f"음주 여부는 {v[0]}입니다." if v else "",
+    }
+    sentences = []
+    for k, v in meta.items():
+        if k in exclude_fields:
+            continue
+        if k in templates:
+            # 리스트/단일값 구분
+            value = v if isinstance(v, list) else [v] if v is not None else []
+            sentence = templates[k](value)
+            if sentence:
+                sentences.append(sentence)
+    return " ".join(sentences)
 
 
 # 텍스트 생성 함수 (임베딩용 필드만 포함)
@@ -21,7 +61,7 @@ def convert_user_to_text(data: dict, fields: List[str]) -> str:
 
 
 # 필드별 임베딩
-@logger.log_performance(operation_name="embed_fields", include_memory=True)
+@log_performance(operation_name="embed_fields", include_memory=True)
 def embed_fields(user: dict, fields: list, model=None) -> dict:
     """
     개별 필드를 임베딩 벡터로 변환
@@ -57,7 +97,7 @@ def embed_fields(user: dict, fields: list, model=None) -> dict:
                     f"Invalid dimension for field '{field}': {len(embedding)}"
                 )
         except Exception as e:
-            print(f"[embed_fields ERROR] Field: {field} / Error: {str(e)}")
+            logger.error(f"[embed_fields ERROR] Field: {field} / Error: {str(e)}")
             embedding = [0.0] * dim
 
         field_embeddings[field] = embedding
@@ -65,7 +105,7 @@ def embed_fields(user: dict, fields: list, model=None) -> dict:
     return field_embeddings
 
 
-@logger.log_performance(operation_name="embed_fields_optimized", include_memory=True)
+@log_performance(operation_name="embed_fields_optimized", include_memory=True)
 def embed_fields_optimized(user: dict, fields: list) -> dict:
     """
     최적화된 필드별 임베딩 벡터 생성

@@ -4,8 +4,6 @@
 /api 요청을 처리하고, 비즈니스 로직 실행을 위해 컨트롤러와 연결
 """
 
-from typing import Optional
-
 from api.controllers import tuning_controller
 from fastapi import APIRouter, Query
 from schemas.tuning_schema import TuningResponse
@@ -52,6 +50,6 @@ class TuningRouter:
         user_id: int = Query(
             ..., alias="userId", description="매칭할 사용자의 ID", gt=0
         ),
-        category: Optional[str] = Query(None, description="카테고리 (v3용 파라미터)"),
+        category: str = Query(..., description="카테고리 (v3용 파라미터)"),
     ) -> TuningResponse:
         return await tuning_controller.get_tuning_matches_by_category(user_id, category)

@@ -15,6 +15,8 @@ import json
 from typing import Dict, List
 
 import numpy as np
+from core.embedding import user_data_to_sentence
+from models.sbert_loader import get_model
 from sklearn.metrics.pairwise import cosine_similarity
 from utils.logger import log_performance
 
@@ -229,7 +231,7 @@ def rule_based_similarity(user1: dict, user2: dict) -> float:
     # - 기본 필드(종교,흡연,음주): 30%
     # - MBTI 호환성: 20%
     # - 연령대 일치도: 20%
-    # - 선호-성격 매칭(양방향 평균): 30%
+    # - 선호-성격 매칭(양방향 평균): 30% -> 삭제
 
     final_score = (
         base_score * 0.3
@@ -237,6 +239,34 @@ def rule_based_similarity(user1: dict, user2: dict) -> float:
         + age_score * 0.2
         + (pref_score + rev_pref_score) / 2 * 0.3
     )
+
+    # 소수점 6자리로 반올림하여 반환
+    return round(final_score, 6)
+
+
+def rule_based_similarity_v3(user1: dict, user2: dict) -> float:
+    """
+    사용자 프로필 데이터를 기반으로 규칙 기반 유사도 점수 계산
+    여러 속성(MBTI, 연령대, 성격 등)의 일치도를 종합
+
+    Args:
+        user1: 첫 번째 사용자 프로필 데이터
+        user2: 두 번째 사용자 프로필 데이터
+
+    Returns:
+        0.0~1.0 사이의 규칙 기반 유사도 점수
+    """
+    # MBTI 호환성 점수
+    mbti_score = mbti_weighted_score(user1.get("MBTI"), user2.get("MBTI"))
+
+    # 연령대 일치도 점수
+    age_score = age_group_match_score(user1.get("ageGroup"), user2.get("ageGroup"))
+
+    # 가중치를 적용한 최종 점수 계산
+    # - MBTI 호환성: 50%
+    # - 연령대 일치도: 50%
+
+    final_score = mbti_score * 0.5 + age_score * 0.5
 
     # 소수점 6자리로 반올림하여 반환
     return round(final_score, 6)
@@ -258,6 +288,7 @@ def normalize_vector(vector: np.ndarray) -> np.ndarray:
     return vector / norm
 
 
+# combine_embeddings, average_field_embedding 등 임베딩 결합 함수는 더이상 사용하지 않으므로 아래와 같이 주석 처리 또는 삭제합니다.
 def combine_embeddings(
     profile_embedding: List[float],
     field_embeddings: dict,
@@ -321,7 +352,7 @@ def compute_matching_score(
 
     # 2. 사용자 도메인 기준 필터링
     all_ids = all_users["ids"]
-    all_embeddings = all_users["embeddings"]
+    # all_embeddings = all_users["embeddings"]
     all_metas = all_users["metadatas"]
     domain = user_meta.get("emailDomain")
     my_gender = user_meta.get("gender")
@@ -350,7 +381,9 @@ def compute_matching_score(
     for i in domain_indices:
         other_meta = all_metas[i]
         other_fields = json.loads(other_meta.get("field_embeddings", "{}"))
-        combined_other_embedding = combine_embeddings(all_embeddings[i], other_fields)
+        combined_other_embedding = np.array(
+            average_field_embedding(other_fields, EMBEDDING_FIELDS)
+        )
 
         other_ids.append(all_ids[i])
         other_embeddings.append(combined_other_embedding)
@@ -365,6 +398,73 @@ def compute_matching_score(
     similarities = {}
     for idx, other_id in enumerate(other_ids):
         rule_sim = rule_based_similarity(user_meta, other_metas_filtered[idx])
+        final_score = embedding_weight * cosine_sims[idx] + rule_weight * rule_sim
+        similarities[other_id] = round(final_score, 6)
+
+    return similarities
+
+
+def compute_matching_score_sentence_based(
+    user_id: str,
+    user_meta: dict,
+    all_users: dict,
+    category: str,
+) -> dict:
+    """
+    문장 임베딩 기반 매칭 점수 계산 (유저 메타데이터를 한국어 문장으로 변환 후 임베딩)
+    """
+    from sklearn.metrics.pairwise import cosine_similarity
+
+    # 1. 가중치 정의
+    weights_by_category = {
+        "friend": {"embedding": 0.7, "rule": 0.3},
+        "couple": {"embedding": 0.6, "rule": 0.4},
+    }
+    weights = weights_by_category.get(category, weights_by_category["friend"])
+    embedding_weight = weights["embedding"]
+    rule_weight = weights["rule"]
+
+    # 2. 필터링
+    all_ids = all_users["ids"]
+    all_metas = all_users["metadatas"]
+    domain = user_meta.get("emailDomain")
+    my_gender = user_meta.get("gender")
+
+    domain_indices = []
+    for i, meta in enumerate(all_metas):
+        if all_ids[i] == user_id:
+            continue
+        if meta.get("emailDomain") != domain:
+            continue
+        if category == "couple":
+            if my_gender and meta.get("gender") == my_gender:
+                continue
+        domain_indices.append(i)
+
+    if not domain_indices:
+        return {}
+
+    model = get_model()
+
+    # 내 텍스트 임베딩
+    my_text = user_data_to_sentence(user_meta)
+    my_embedding = model.encode(my_text, show_progress_bar=False)
+
+    # 다른 사용자들의 텍스트를 배치로 준비
+    other_metas_filtered = [all_metas[i] for i in domain_indices]
+    other_ids = [all_ids[i] for i in domain_indices]
+    other_texts = [user_data_to_sentence(meta) for meta in other_metas_filtered]
+
+    # 배치 임베딩
+    if not other_texts:
+        return {}
+    other_embeddings_matrix = model.encode(other_texts, show_progress_bar=False)
+    cosine_sims = cosine_similarity([my_embedding], other_embeddings_matrix)[0]
+
+    # 4. 최종 점수
+    similarities = {}
+    for idx, other_id in enumerate(other_ids):
+        rule_sim = rule_based_similarity_v3(user_meta, other_metas_filtered[idx])
         final_score = embedding_weight * cosine_sims[idx] + rule_weight * rule_sim
         similarities[other_id] = round(final_score, 6)
 

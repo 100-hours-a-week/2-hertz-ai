@@ -1,5 +1,4 @@
 import json
-from typing import Optional
 
 from core.vector_database import get_similarities, get_users_data
 from fastapi import HTTPException
@@ -9,7 +8,7 @@ from utils import logger
 
 # 유사도 데이터를 가져오고 파싱하는 함수
 async def fetch_user_similarities(
-    user_id: str, category: Optional[str] = "friend"
+    user_id: str, category: str = "friend"
 ) -> dict[str, float]:
     user_similarities = await get_similarities(category, user_id)
 

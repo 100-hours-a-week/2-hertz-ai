@@ -1,3 +1,4 @@
+import concurrent.futures
 import os
 import sys
 import traceback
@@ -5,27 +6,36 @@ import traceback
 script_dir = os.path.dirname(__file__)
 project_root = os.path.abspath(os.path.join(script_dir, os.pardir))
 sys.path.insert(0, project_root)
-from core.matching_score_by_category import compute_matching_score
-from core.vector_database import get_user_collection
-from fastapi import HTTPException
-from services.user_service import upsert_similarity_v3
-from utils.logger import log_performance, logger
 
-# SIM_COLLECTIONS = {"friend": "friend_similarities", "couple": "couple_similarities"} # get_similarity_collection 등으로 대체
+from core.vector_database import get_user_collection  # noqa: E402
+from services.user_service import update_similarity_for_users_v3  # noqa: E402
+from utils.logger import log_performance, logger  # noqa: E402
+
+# CPU 코어 수의 50%만 사용 (예: 8코어면 4개)
+worker_count = max(1, int(os.cpu_count() * 0.5))
 
 
 def get_all_user_ids():
-    data = get_user_collection().get(include=[])
+    # user_similarities 컬렉션에서 유저 ID만 가져옴
+    data = get_user_collection(collection_name="user_similarities").get(include=[])
     return data["ids"]
 
 
-def recompute_all_similarities(mode: str):
-    """
-    모든 유저 데이터를 한 번만 로드하여 유사도를 재계산합니다.
-    """
-    logger.info(f"✅ Recomputing {mode} similarities...")
+def process_user(user_id, category):
 
-    # 1. 성능 개선: 모든 유저 정보를 한 번만 가져옵니다.
+    try:
+        update_similarity_for_users_v3(user_id, category)
+        logger.info(f"[{category}] Updated: {user_id}")
+        return True
+    except Exception as e:
+        logger.error(f"[ERROR] {category} similarity failed for {user_id}: {e}")
+        traceback.print_exc()
+        return False
+
+
+@log_performance(operation_name="recompute_all_similarities_v3", include_memory=True)
+def recompute_all_similarities_v3():
+    logger.info("✅ Recomputing similarities (sentence-based, v3)...")
     try:
         all_users = get_user_collection().get(include=["embeddings", "metadatas"])
     except Exception as e:
@@ -33,68 +43,41 @@ def recompute_all_similarities(mode: str):
         return
 
     user_ids = all_users["ids"]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:
+        futures = []
+        for user_id in user_ids:
+            for category in ["friend", "couple"]:
+                futures.append(executor.submit(process_user, user_id, category))
 
-    for user_id in user_ids:
-        try:
-            # 2. 개선: all_users 데이터를 파라미터로 전달합니다.
-            result = update_similarity_for_single_user(
-                user_id=user_id, category=mode, all_users_data=all_users
-            )
-            logger.info(
-                f"[{mode.upper()}] Updated: {user_id} with {result['updated_similarities']} matches"
-            )
-        except Exception as e:
-            logger.info(f"[ERROR] {mode} similarity failed for {user_id}: {e}")
-            traceback.print_exc()
+        for i, future in enumerate(concurrent.futures.as_completed(futures), 1):
+            try:
+                future.result()
+            except Exception as e:
+                logger.error(f"[ERROR] Future failed: {e}")
+            if i % 10 == 0:
+                logger.info(f"진행률: {i}/{len(futures)}")
 
-
-@log_performance(
-    operation_name="update_similarity_for_single_user", include_memory=True
-)
-def update_similarity_for_single_user(
-    user_id: str, category: str, all_users_data: dict
-) -> dict:
-    """
-    단일 유저에 대해 다른 모든 유저와의 유사도를 계산하고 저장합니다. (단방향)
-    """
-    try:
-        ids = all_users_data["ids"]
-        if user_id not in ids:
-            # 에러 처리는 기존과 같이 유지
-            raise HTTPException(status_code=404, detail=...)
-
-        idx = ids.index(user_id)
-        user_embedding, user_meta = (
-            all_users_data["embeddings"][idx],
-            all_users_data["metadatas"][idx],
-        )
-
-        # 3. 로직 단순화: 정방향 계산만 수행합니다.
-        similarities = compute_matching_score(
-            user_id=user_id,
-            user_embedding=user_embedding,
-            user_meta=user_meta,
-            all_users=all_users_data,
-            category=category,  # <--- 이 라인을 추가하세요
-        )
-
-        # 4. 단순화 및 수정: `category`를 사용해 해당 컬렉션에 한 번만 저장합니다.
-        upsert_similarity_v3(
-            user_id=user_id,
-            embedding=user_embedding,
-            similarities=similarities,
-            category=category,
-        )
-
-        return {"userId": user_id, "updated_similarities": len(similarities)}
-
-    except Exception as e:
-        # 에러 처리는 기존과 같이 유지
-        logger.info(f"[SIMILARITY_UPDATE_ERROR] {e}")
-        raise HTTPException(status_code=500, detail=...)
+    logger.info("🎉 All similarity recomputations completed.")
 
 
 if __name__ == "__main__":
-    recompute_all_similarities("friend")
-    recompute_all_similarities("couple")
-    logger.info("🎉 All similarity recomputations completed.")
+    recompute_all_similarities_v3()
+
+
+async def monitor_script_execution(process):
+    """스크립트 실행 상태 모니터링"""
+    try:
+        stdout, stderr = await process.communicate()
+
+        if process.returncode == 0:
+            logger.info("✅ 유사도 재계산 스크립트 실행 완료")
+            if stdout:
+                logger.info(f"스크립트 출력: {stdout.decode()}")
+        else:
+            logger.error(
+                f"❌ 유사도 재계산 스크립트 실행 실패 (exit code: {process.returncode})"
+            )
+            if stderr:
+                logger.error(f"에러 출력: {stderr.decode()}")
+    except Exception as e:
+        logger.error(f"스크립트 모니터링 중 오류: {e}")
