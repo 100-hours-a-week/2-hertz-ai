@@ -1,5 +1,4 @@
 import json
-import os
 import random
 from typing import Annotated, TypedDict
 
@@ -11,8 +10,8 @@ from langgraph.graph import StateGraph, add_messages
 from langgraph.prebuilt import create_react_agent
 
 from ..core.enum_process import convert_to_korean
-from ..models.midm_loader_gcp_transformer import get_langchain_model
-from ..schemas.tuning_schema import TuningReport, TuningReportResponse, UserProfile
+from ..models.midm_loader_gcp_vllm import get_model
+from ..schemas.tuning_schema import TuningReport, TuningReportResponse
 from ..utils.logger import log_performance, logger
 
 load_dotenv()
@@ -107,7 +106,7 @@ def generate_tuning_report_with_agent(request: TuningReport) -> TuningReportResp
     try:
 
         # model - K-intelligence/Midm-2.0-Base-Instruct
-        model = get_langchain_model()
+        model = get_model()
 
         # 관계 분석 에이전트
         connection_finder_agent = create_react_agent(
