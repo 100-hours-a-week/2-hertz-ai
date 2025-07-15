@@ -65,6 +65,12 @@ def get_similarity_collection(category: Optional[str] = None):
     Returns:
         Collection 객체
     """
+    # 'category'가 COLLECTION_MAP의 유효한 키인지 확인
+    if category not in COLLECTION_MAP:
+        # 유효하지 않은 경우
+        raise ValueError(
+            f"Invalid category: '{category}'. Allowed values are 'friend', 'couple', or None."
+        )
 
     key, name = COLLECTION_MAP[category]
     return _get_or_create_collection(key, name)
