@@ -317,7 +317,7 @@ jobs:
             if [ "$ENV" = "production" ] || [ "$ENV" = "prod" ]; then
               CPU_LIMIT=3.5
             else
-              CPU_LIMIT=1.5
+              CPU_LIMIT=3.5
             fi
 
             # .env 파일에 이미지 정보 세팅
@@ -338,7 +338,7 @@ jobs:
             docker compose --env-file .env up -d tuning-api
 
             echo "🕒 FastAPI 서버 기동 대기 중..."
-            sleep 15
+            sleep 30
 
             # ================== Health Check + 태그 기록 + 롤백 (Prod만) ==================
              # 최초 롤백 대비: 파일이 없으면 빈 파일 생성(최초 배포, 또는 수동 복구 대비)
@@ -358,7 +358,7 @@ jobs:
                 exit 0
               fi
               echo "⏱️ API 서비스 준비 대기 중... ($i/5)"
-              sleep 10
+              sleep 20
             done
 
             if [ "$ENV" = "production" ] || [ "$ENV" = "prod" ]; then
