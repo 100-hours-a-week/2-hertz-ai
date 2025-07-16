@@ -115,7 +115,7 @@ def update_reverse_similarities(user_id: str, similarities: dict):
             upsert_similarity(other_id, other_embedding, reverse_map)
 
         except Exception as e:
-            print(f"[REVERSE_SIMILARITY_UPDATE_ERROR]: {other_id} / {e}")
+            logger.error(f"[REVERSE_SIMILARITY_UPDATE_ERROR]: {other_id} / {e}")
             raise RuntimeError(f"역방향 유사도 업데이트 실패: {e}")
 
 
@@ -190,7 +190,7 @@ def update_similarity_for_users(user_id: str) -> dict:
         raise http_ex
 
     except Exception as e:
-        print(f"[SIMILARITY_UPDATE_ERROR] {e}")
+        logger.error(f"[SIMILARITY_UPDATE_ERROR] {e}")
         raise HTTPException(
             status_code=500,
             detail={
@@ -303,7 +303,7 @@ async def register_user(user: EmbeddingRegister) -> None:
         )
 
     except Exception as e:
-        print(f"[ REGISTER ERROR] 사용자 등록 실패: {e}")
+        logger.error(f"[ REGISTER ERROR] 사용자 등록 실패: {e}")
         raise HTTPException(
             status_code=500,
             detail={"code": "EMBEDDING_REGISTER_SERVER_ERROR", "message": str(e)},
@@ -312,7 +312,7 @@ async def register_user(user: EmbeddingRegister) -> None:
     try:
         update_similarity_for_users(user_id)
     except Exception as e:
-        print(f"[ SIMILARITY ERROR] 유사도 처리 실패: {e}")
+        logger.error(f"[ SIMILARITY ERROR] 유사도 처리 실패: {e}")
         raise HTTPException(
             status_code=500,
             detail={
@@ -400,7 +400,7 @@ def update_similarity_for_users_v3(
         raise http_ex
 
     except Exception as e:
-        print(f"[SIMILARITY_UPDATE_ERROR] {e}")
+        logger.error(f"[SIMILARITY_UPDATE_ERROR] {e}")
         raise HTTPException(
             status_code=500,
             detail={
@@ -412,11 +412,12 @@ def update_similarity_for_users_v3(
 
 # float32 타입을 float으로 변환해주는 헬퍼 함수
 def convert_numpy_floats(obj):
-    """
-    딕셔너리 내의 모든 numpy.float32 값을 파이썬 기본 float으로 재귀적으로 변환합니다.
-    """
+    import numpy as np
+
     if isinstance(obj, np.float32):
-        return float(obj)
+        return round(float(obj), 6)
+    if isinstance(obj, float):
+        return round(obj, 6)
     if isinstance(obj, dict):
         return {k: convert_numpy_floats(v) for k, v in obj.items()}
     if isinstance(obj, list):
@@ -430,25 +431,22 @@ def upsert_similarity_v3(
     user_id: str, embedding: list, similarities: dict, category: str
 ):
     collection = get_similarity_collection(category)
-    # json.dumps를 호출하기 전에 딕셔너리의 모든 값을 검사하여 변환합니다.
+    # float 변환 및 6자리 반올림
     serializable_similarities = convert_numpy_floats(similarities)
     existing_data = collection.get(ids=[user_id], include=["metadatas"])
-
-    # 기존 데이터가 있고, 유사도 데이터가 동일하면 업데이트하지 않음
     if (
-        existing_data["ids"]  # ID 존재 여부 먼저 확인
+        existing_data["ids"]
         and existing_data["metadatas"][0]
         and json.loads(existing_data["metadatas"][0].get("similarities", "{}"))
         == serializable_similarities
     ):
         return
-
     collection.upsert(
         ids=[user_id],
         embeddings=[embedding],
         metadatas=[
             {"userId": user_id, "similarities": json.dumps(serializable_similarities)}
-        ],  # 변환된 딕셔너리 사용
+        ],
     )
 
 
