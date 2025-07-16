@@ -317,7 +317,7 @@ jobs:
             if [ "$ENV" = "production" ] || [ "$ENV" = "prod" ]; then
               CPU_LIMIT=3.5
             else
-              CPU_LIMIT=1.5
+              CPU_LIMIT=3.5
             fi
 
             # .env 파일에 이미지 정보 세팅
