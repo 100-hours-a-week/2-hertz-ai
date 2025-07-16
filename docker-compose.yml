@@ -20,11 +20,10 @@ services:
       - tuning_logs:/app/logs
       - /home/deploy/models:/app/model-cache
     depends_on: [ chromadb ]
-    deploy:
-      resources:
-        limits:
-          cpus: "1.5"
-          memory: "11G"
+    cpu_count: 4 # soft limit (optional)
+    cpu_quota: 350000 # 3.5 core
+    cpu_period: 100000 # default 100ms
+    mem_limit: 11g # memory 제한도 deploy 없이 설정하려면 이렇게
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/api/v1/health/chromadb" ]
       interval: 30s
