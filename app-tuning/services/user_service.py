@@ -1,4 +1,3 @@
-import concurrent.futures
 import json
 
 import numpy as np
@@ -546,9 +545,7 @@ async def register_user_v3(user: EmbeddingRegister) -> None:
     try:
         user_id = str(user.userId)
         validate_user_fields(user)
-
-    except HTTPException:
-        raise
+    # ... (예외 처리 부분은 동일) ...
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -562,7 +559,6 @@ async def register_user_v3(user: EmbeddingRegister) -> None:
 
     try:
         user_dict = user.model_dump()
-
         target_fields = [
             "religion",
             "smoking",
@@ -576,9 +572,8 @@ async def register_user_v3(user: EmbeddingRegister) -> None:
             "selfDevelopment",
             "hobbies",
         ]
-
         embedding, metadata = prepare_embedding_data(user_dict, target_fields)
-
+    # ... (예외 처리 부분은 동일) ...
     except Exception as e:
         logger.error(f"[ REGISTER ERROR] 사용자 등록 실패: {e}")
         raise HTTPException(
@@ -590,14 +585,23 @@ async def register_user_v3(user: EmbeddingRegister) -> None:
         get_user_collection().add(
             ids=[user_id], embeddings=[embedding], metadatas=[metadata]
         )
-        # friend/couple 카테고리 병렬 처리
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            futures = [
-                executor.submit(update_similarity_for_users_v3, user_id, category)
-                for category in ["friend", "couple"]
-            ]
-            for future in concurrent.futures.as_completed(futures):
-                future.result()  # 예외 발생 시 처리
+
+        # --- 기존 병렬 처리 코드 ---
+        # with concurrent.futures.ThreadPoolExecutor() as executor:
+        #     futures = [
+        #         executor.submit(update_similarity_for_users_v3, user_id, category)
+        #         for category in ["friend", "couple"]
+        #     ]
+        #     for future in concurrent.futures.as_completed(futures):
+        #         future.result()
+
+        # --- ✨ 변경된 순차 처리 코드 ---
+        logger.info(f"유사도 계산을 순차적으로 시작합니다: user_id={user_id}")
+        for category in ["friend", "couple"]:
+            logger.info(f"[{category}] 카테고리 계산 시작...")
+            update_similarity_for_users_v3(user_id, category)
+            logger.info(f"[{category}] 카테고리 계산 완료.")
+
     except Exception as e:
         # ❌ 유사도 저장 실패 → 사용자 등록/벡터 모두 삭제
         logger.error(f"[USER REGISTER FAIL] rollback for {user_id} due to: {e}")

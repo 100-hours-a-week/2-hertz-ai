@@ -27,7 +27,7 @@ from services.user_service import update_similarity_for_users_v3  # noqa: E402
 from utils.logger import log_performance, logger  # noqa: E402
 
 # 최적화된 워커 수 (CPU 코어의 75% 사용)
-WORKER_COUNT = max(1, int(os.cpu_count() * 0.75))
+# WORKER_COUNT = max(1, int(os.cpu_count() * 0.75))
 BATCH_SIZE = 10  # 로그 출력 단위
 
 
@@ -96,12 +96,72 @@ def process_user_wrapper(user_id: str, all_users_data: dict):
         return False, user_id
 
 
+# @log_performance(
+#     operation_name="recompute_all_similarities_optimized", include_memory=True
+# )
+# def recompute_all_similarities_optimized():
+#     """최적화된 유사도 재계산 메인 함수"""
+#     logger.info("🚀 최적화된 유사도 재계산 시작 (V3)...")
+#     start_time = time.time()
+
+#     all_users_data = get_all_users_data()
+#     if not all_users_data or not all_users_data.get("ids"):
+#         logger.warning("처리할 사용자가 없습니다.")
+#         return
+
+#     user_ids = all_users_data["ids"]
+#     total_users = len(user_ids)
+#     logger.info(f"📈 처리 대상 사용자: {total_users}명")
+#     # logger.info(f"⚙️ 워커 수: {WORKER_COUNT}")
+
+#     processed_count = 0
+#     success_count = 0
+#     failure_count = 0
+
+#     with concurrent.futures.ThreadPoolExecutor(max_workers=WORKER_COUNT) as executor:
+#         future_to_user_id = {
+#             executor.submit(process_user_wrapper, user_id, all_users_data): user_id
+#             for user_id in user_ids
+#         }
+
+#         for future in concurrent.futures.as_completed(future_to_user_id):
+#             processed_count += 1
+#             try:
+#                 success, user_id = future.result()
+#                 if success:
+#                     success_count += 1
+#                 else:
+#                     failure_count += 1
+
+#                 if processed_count % BATCH_SIZE == 0 or processed_count == total_users:
+#                     progress = (processed_count / total_users) * 100
+#                     logger.info(
+#                         f"🔄 진행률: {processed_count}/{total_users} ({progress:.1f}%) "
+#                         f"(성공: {success_count}, 실패: {failure_count})"
+#                     )
+
+#             except Exception as e:
+#                 user_id = future_to_user_id[future]
+#                 logger.error(
+#                     f"[CRITICAL] 사용자 {user_id} 처리 중 심각한 오류 발생: {e}"
+#                 )
+#                 traceback.print_exc()
+#                 failure_count += 1
+
+#     total_time = time.time() - start_time
+#     logger.info("🎉 전체 유사도 재계산 완료!")
+#     logger.info(f"📊 총 처리 시간: {total_time:.2f}초")
+#     logger.info(f"✅ 성공: {success_count}, ❌ 실패: {failure_count}")
+#     if total_time > 0:
+#         logger.info(f"⚡️ 평균 처리 속도: {total_users / total_time:.2f} users/sec")
+
+
 @log_performance(
-    operation_name="recompute_all_similarities_optimized", include_memory=True
+    operation_name="recompute_all_similarities_optimized_v2", include_memory=True
 )
-def recompute_all_similarities_optimized():
-    """최적화된 유사도 재계산 메인 함수"""
-    logger.info("🚀 최적화된 유사도 재계산 시작 (V3)...")
+def recompute_all_similarities_optimized_v2():
+    """순차 처리 방식으로 변경된 유사도 재계산 메인 함수"""
+    logger.info("🐌 순차 처리 방식의 유사도 재계산 시작 (V3)...")
     start_time = time.time()
 
     all_users_data = get_all_users_data()
@@ -112,41 +172,40 @@ def recompute_all_similarities_optimized():
     user_ids = all_users_data["ids"]
     total_users = len(user_ids)
     logger.info(f"📈 처리 대상 사용자: {total_users}명")
-    logger.info(f"⚙️ 워커 수: {WORKER_COUNT}")
 
     processed_count = 0
     success_count = 0
     failure_count = 0
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=WORKER_COUNT) as executor:
-        future_to_user_id = {
-            executor.submit(process_user_wrapper, user_id, all_users_data): user_id
-            for user_id in user_ids
-        }
+    # --- 기존 병렬 처리 코드 ---
+    # with concurrent.futures.ThreadPoolExecutor(max_workers=WORKER_COUNT) as executor:
+    #     future_to_user_id = { ... }
+    #     for future in concurrent.futures.as_completed(future_to_user_id):
+    #         ...
 
-        for future in concurrent.futures.as_completed(future_to_user_id):
-            processed_count += 1
-            try:
-                success, user_id = future.result()
-                if success:
-                    success_count += 1
-                else:
-                    failure_count += 1
-
-                if processed_count % BATCH_SIZE == 0 or processed_count == total_users:
-                    progress = (processed_count / total_users) * 100
-                    logger.info(
-                        f"🔄 진행률: {processed_count}/{total_users} ({progress:.1f}%) "
-                        f"(성공: {success_count}, 실패: {failure_count})"
-                    )
-
-            except Exception as e:
-                user_id = future_to_user_id[future]
-                logger.error(
-                    f"[CRITICAL] 사용자 {user_id} 처리 중 심각한 오류 발생: {e}"
-                )
-                traceback.print_exc()
+    # --- ✨ 변경된 순차 처리 코드 ---
+    for user_id in user_ids:
+        processed_count += 1
+        try:
+            # 각 사용자를 순서대로 하나씩 처리
+            success, _ = process_user_wrapper(user_id, all_users_data)
+            if success:
+                success_count += 1
+            else:
                 failure_count += 1
+
+        except Exception as e:
+            logger.error(f"[CRITICAL] 사용자 {user_id} 처리 중 심각한 오류 발생: {e}")
+            traceback.print_exc()
+            failure_count += 1
+
+        # 진행률 로깅 (기존 로직 유지)
+        if processed_count % BATCH_SIZE == 0 or processed_count == total_users:
+            progress = (processed_count / total_users) * 100
+            logger.info(
+                f"🔄 진행률: {processed_count}/{total_users} ({progress:.1f}%) "
+                f"(성공: {success_count}, 실패: {failure_count})"
+            )
 
     total_time = time.time() - start_time
     logger.info("🎉 전체 유사도 재계산 완료!")
@@ -154,89 +213,6 @@ def recompute_all_similarities_optimized():
     logger.info(f"✅ 성공: {success_count}, ❌ 실패: {failure_count}")
     if total_time > 0:
         logger.info(f"⚡️ 평균 처리 속도: {total_users / total_time:.2f} users/sec")
-
-
-# ... (기존 import 및 함수 정의는 동일) ...
-# process_user_wrapper 함수는 더 이상 필요 없으므로 삭제합니다.
-
-
-@log_performance(
-    operation_name="recompute_all_similarities_optimized_v2", include_memory=True
-)
-def recompute_all_similarities_optimized_v2():  # 함수 이름 변경
-    """최적화된 유사도 재계산 메인 함수 (단일 풀 구조)"""
-    logger.info("🚀 최적화된 유사도 재계산 시작 (V3 - Single Pool)...")
-    start_time = time.time()
-
-    all_users_data = get_all_users_data()
-    if not all_users_data or not all_users_data.get("ids"):
-        logger.warning("처리할 사용자가 없습니다.")
-        return
-
-    user_ids = all_users_data["ids"]
-    categories = ["friend", "couple"]
-
-    # (user_id, category) 형태의 모든 작업 목록을 생성
-    tasks = [(user_id, category) for user_id in user_ids for category in categories]
-    total_tasks = len(tasks)
-
-    logger.info(f"📈 처리 대상 사용자: {len(user_ids)}명 (총 작업: {total_tasks}개)")
-    logger.info(f"⚙️ 워커 수: {WORKER_COUNT}")
-
-    processed_count = 0
-    success_count = 0
-    failure_count = 0
-
-    # 단일 ThreadPoolExecutor 생성. CPU 바운드 작업이라면 ProcessPoolExecutor로 교체 고려
-    with concurrent.futures.ThreadPoolExecutor(max_workers=WORKER_COUNT) as executor:
-        # (user_id, category)를 인자로 받는 함수를 직접 제출
-        future_to_task = {
-            executor.submit(process_user_category, user_id, category, all_users_data): (
-                user_id,
-                category,
-            )
-            for user_id, category in tasks
-        }
-
-        for future in concurrent.futures.as_completed(future_to_task):
-            processed_count += 1
-            user_id, category = future_to_task[future]
-            try:
-                success, error_message = future.result()
-                if success:
-                    success_count += 1
-                else:
-                    failure_count += 1
-                    logger.error(error_message)  # 개별 오류 메시지 로깅
-
-                # 로그 출력은 BATCH_SIZE의 배수마다 (작업 단위)
-                if (
-                    processed_count % (BATCH_SIZE * len(categories)) == 0
-                    or processed_count == total_tasks
-                ):
-                    progress = (processed_count / total_tasks) * 100
-                    logger.info(
-                        f"🔄 진행률: {processed_count}/{total_tasks} ({progress:.1f}%) "
-                        f"(성공: {success_count}, 실패: {failure_count})"
-                    )
-
-            except Exception as e:
-                logger.error(
-                    f"[CRITICAL] 작업({user_id}, {category}) 처리 중 심각한 오류 발생: {e}"
-                )
-                traceback.print_exc()
-                failure_count += 1
-
-    total_time = time.time() - start_time
-    logger.info("🎉 전체 유사도 재계산 완료!")
-    logger.info(f"📊 총 처리 시간: {total_time:.2f}초")
-    # 성공/실패는 '작업' 단위로 계산
-    logger.info(
-        f"✅ 성공: {success_count}, ❌ 실패: {failure_count} (총 {total_tasks}개 작업)"
-    )
-    if total_time > 0:
-        # 초당 처리 '사용자' 수로 환산하여 계산
-        logger.info(f"⚡️ 평균 처리 속도: {len(user_ids) / total_time:.2f} users/sec")
 
 
 if __name__ == "__main__":
