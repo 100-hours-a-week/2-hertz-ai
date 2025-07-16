@@ -410,29 +410,45 @@ def update_similarity_for_users_v3(
         )
 
 
+# float32 타입을 float으로 변환해주는 헬퍼 함수
+def convert_numpy_floats(obj):
+    """
+    딕셔너리 내의 모든 numpy.float32 값을 파이썬 기본 float으로 재귀적으로 변환합니다.
+    """
+    if isinstance(obj, np.float32):
+        return float(obj)
+    if isinstance(obj, dict):
+        return {k: convert_numpy_floats(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [convert_numpy_floats(i) for i in obj]
+    return obj
+
+
 # 매칭 스코어 정보 DB 저장 (V3 - 변경 사항이 있을 때만 업데이트)
-
-
 @log_performance(operation_name="upsert_similarity_v3", include_memory=True)
 def upsert_similarity_v3(
     user_id: str, embedding: list, similarities: dict, category: str
 ):
     collection = get_similarity_collection(category)
+    # json.dumps를 호출하기 전에 딕셔너리의 모든 값을 검사하여 변환합니다.
+    serializable_similarities = convert_numpy_floats(similarities)
     existing_data = collection.get(ids=[user_id], include=["metadatas"])
 
     # 기존 데이터가 있고, 유사도 데이터가 동일하면 업데이트하지 않음
     if (
-        existing_data
-        and existing_data["metadatas"]
+        existing_data["ids"]  # ID 존재 여부 먼저 확인
+        and existing_data["metadatas"][0]
         and json.loads(existing_data["metadatas"][0].get("similarities", "{}"))
-        == similarities
+        == serializable_similarities
     ):
         return
 
     collection.upsert(
         ids=[user_id],
         embeddings=[embedding],
-        metadatas=[{"userId": user_id, "similarities": json.dumps(similarities)}],
+        metadatas=[
+            {"userId": user_id, "similarities": json.dumps(serializable_similarities)}
+        ],  # 변환된 딕셔너리 사용
     )
 
 
