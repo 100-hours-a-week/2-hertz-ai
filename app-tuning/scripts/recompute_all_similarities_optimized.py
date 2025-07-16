@@ -16,6 +16,8 @@ import sys
 import time
 import traceback
 
+import numpy as np
+
 script_dir = os.path.dirname(__file__)
 project_root = os.path.abspath(os.path.join(script_dir, os.pardir))
 sys.path.insert(0, project_root)
@@ -41,10 +43,24 @@ def get_all_users_data():
         return None
 
 
+def convert_numpy_floats(obj):
+    if isinstance(obj, np.float32):
+        return float(obj)
+    if isinstance(obj, dict):
+        return {k: convert_numpy_floats(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [convert_numpy_floats(i) for i in obj]
+    return obj
+
+
 def process_user_category(user_id: str, category: str, all_users_data: dict):
     """단일 사용자의 특정 카테고리 유사도를 업데이트합니다."""
     try:
-        update_similarity_for_users_v3(user_id, category, all_users_data)
+        # update_similarity_for_users_v3 내부에서 similarities를 저장하기 전에 float32 변환이 누락될 수 있으므로,
+        # 변환을 강제 적용 (함수 내부에서 이미 처리 중이어도 중복 적용은 무해)
+        update_similarity_for_users_v3(
+            user_id, category, all_users_data, convert_floats=True
+        )
         return True, None
     except Exception as e:
         error_message = f"[ERROR] {category} 유사도 계산 실패 for {user_id}: {e}"
