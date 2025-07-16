@@ -15,6 +15,7 @@ import json
 from typing import Dict, List
 
 import numpy as np
+import pandas as pd
 from core.embedding import user_data_to_sentence
 from models.sbert_loader import get_model
 from sklearn.metrics.pairwise import cosine_similarity
@@ -413,7 +414,6 @@ def compute_matching_score_sentence_based(
     """
     문장 임베딩 기반 매칭 점수 계산 (유저 메타데이터를 한국어 문장으로 변환 후 임베딩)
     """
-    from sklearn.metrics.pairwise import cosine_similarity
 
     # 1. 가중치 정의
     weights_by_category = {
@@ -424,48 +424,52 @@ def compute_matching_score_sentence_based(
     embedding_weight = weights["embedding"]
     rule_weight = weights["rule"]
 
-    # 2. 필터링
-    all_ids = all_users["ids"]
-    all_metas = all_users["metadatas"]
-    domain = user_meta.get("emailDomain")
-    my_gender = user_meta.get("gender")
+    # 2. 데이터를 Pandas DataFrame으로 변환 (한 번만 수행)
+    df = pd.DataFrame(all_users["metadatas"])
+    df["id"] = all_users["ids"]
 
-    domain_indices = []
-    for i, meta in enumerate(all_metas):
-        if all_ids[i] == user_id:
-            continue
-        if meta.get("emailDomain") != domain:
-            continue
-        if category == "couple":
-            if my_gender and meta.get("gender") == my_gender:
-                continue
-        domain_indices.append(i)
+    # 3. Pandas를 이용한 초고속 필터링
+    domain = user_meta.get("emailDomain")  # noqa: F841
+    my_gender = user_meta.get("gender")  # noqa: F841
 
-    if not domain_indices:
+    # 기본 필터링 조건
+    query = "(id != @user_id) & (emailDomain == @domain)"
+    if category == "couple" and my_gender:
+        query += " & (gender != @my_gender)"
+
+    filtered_df = df.query(query).reset_index()  # 쿼리를 통해 조건에 맞는 사용자만 선택
+
+    if filtered_df.empty:
         return {}
 
+    # 4. 임베딩 계산 (필터링된 사용자에 대해서만 수행)
     model = get_model()
 
-    # 내 텍스트 임베딩
     my_text = user_data_to_sentence(user_meta)
     my_embedding = model.encode(my_text, show_progress_bar=False)
 
-    # 다른 사용자들의 텍스트를 배치로 준비
-    other_metas_filtered = [all_metas[i] for i in domain_indices]
-    other_ids = [all_ids[i] for i in domain_indices]
-    other_texts = [user_data_to_sentence(meta) for meta in other_metas_filtered]
-
-    # 배치 임베딩
-    if not other_texts:
-        return {}
+    other_texts = filtered_df.apply(user_data_to_sentence, axis=1).tolist()
     other_embeddings_matrix = model.encode(other_texts, show_progress_bar=False)
+
+    # 5. 유사도 및 점수 계산 (벡터화 연산)
     cosine_sims = cosine_similarity([my_embedding], other_embeddings_matrix)[0]
 
-    # 4. 최종 점수
-    similarities = {}
-    for idx, other_id in enumerate(other_ids):
-        rule_sim = rule_based_similarity_v3(user_meta, other_metas_filtered[idx])
-        final_score = embedding_weight * cosine_sims[idx] + rule_weight * rule_sim
-        similarities[other_id] = round(final_score, 6)
+    # 규칙 기반 유사도 계산
+    # rule_sims = calculate_rule_scores_in_batch(user_meta, filtered_df)
+
+    rule_sims = np.array(
+        [
+            rule_based_similarity_v3(user_meta, row.to_dict())
+            for _, row in filtered_df.iterrows()
+        ]
+    )
+
+    final_scores = embedding_weight * cosine_sims + rule_weight * rule_sims
+
+    # 6. 최종 결과 생성
+    similarities = {
+        other_id: round(score, 6)
+        for other_id, score in zip(filtered_df["id"], final_scores)
+    }
 
     return similarities

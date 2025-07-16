@@ -55,7 +55,7 @@ def prepare_embedding_data(
             user_text, show_progress_bar=False
         ).tolist()  # 통합 텍스트 임베딩 생성
         if not embedding:
-            raise ValueError("임베딩 벡터가 비어 j있습니다.")
+            raise ValueError("임베딩 벡터가 비어 있습니다.")
         field_embeddings = embed_fields_optimized(user_dict, target_fields)
 
         metadata = {k: safe_join(v) for k, v in user_dict.items()}
@@ -372,7 +372,9 @@ def update_similarity_for_users_v3(
             )
         idx = ids.index(user_id)
         user_meta = metadatas[idx]
+        user_embedding = embeddings[idx]
 
+        # 초기 유사도 계산
         similarities = compute_matching_score_sentence_based(
             user_id=user_id,
             user_meta=user_meta,
@@ -380,21 +382,17 @@ def update_similarity_for_users_v3(
             category=category,
         )
 
-        # 현재 유저 유사도 저장
-        upsert_similarity_v3(user_id, embeddings[idx], similarities, category)
-
         # 역방향 저장
         update_reverse_similarities_v3(user_id, similarities, category)
 
-        # 반대방향에도 user_id가 존재하는 경우 통합
-        updated_map = enrich_with_reverse_similarities_v3(
+        # 양방향 유사도 통합
+        final_similarities = enrich_with_reverse_similarities_v3(
             user_id, similarities, all_users_data, category
         )
-
         # 최종 반영
-        upsert_similarity_v3(user_id, embeddings[idx], updated_map, category)
+        upsert_similarity_v3(user_id, user_embedding, final_similarities, category)
 
-        return {"userId": user_id, "updated_similarities_v3": len(updated_map)}
+        return {"userId": user_id, "updated_similarities_v3": len(final_similarities)}
 
     except HTTPException as http_ex:
         raise http_ex
@@ -501,8 +499,10 @@ def update_reverse_similarities_v3(user_id: str, similarities: dict, category: s
         ids = [b[0] for b in upsert_batches]
         embeddings = [b[1] for b in upsert_batches]
         metadatas = [
-            {"userId": b[0], "similarities": json.dumps(b[2])} for b in upsert_batches
+            {"userId": b[0], "similarities": json.dumps(convert_numpy_floats(b[2]))}
+            for b in upsert_batches
         ]
+
         get_similarity_collection(category).upsert(
             ids=ids, embeddings=embeddings, metadatas=metadatas
         )
