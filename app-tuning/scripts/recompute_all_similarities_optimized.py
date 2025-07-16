@@ -58,9 +58,7 @@ def process_user_category(user_id: str, category: str, all_users_data: dict):
     try:
         # update_similarity_for_users_v3 내부에서 similarities를 저장하기 전에 float32 변환이 누락될 수 있으므로,
         # 변환을 강제 적용 (함수 내부에서 이미 처리 중이어도 중복 적용은 무해)
-        update_similarity_for_users_v3(
-            user_id, category, all_users_data, convert_floats=True
-        )
+        update_similarity_for_users_v3(user_id, category, all_users_data)
         return True, None
     except Exception as e:
         error_message = f"[ERROR] {category} 유사도 계산 실패 for {user_id}: {e}"
