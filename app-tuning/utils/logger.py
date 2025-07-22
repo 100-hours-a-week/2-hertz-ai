@@ -81,6 +81,28 @@ def log_performance(operation_name: Optional[str] = None, include_memory: bool =
                         break
 
             user_id = str(user_id) if user_id is not None else "unknown"
+            # 카테고리 추출 시도 (파라미터로 지정된 경우 우선 사용)
+            extracted_category = None
+            if not extracted_category:
+                # 1. kwargs에서 직접 추출
+                extracted_category = kwargs.get("category")
+
+                # 2. bound_args에서 category 파라미터 추출
+                if not extracted_category and "category" in bound_args.arguments:
+                    extracted_category = bound_args.arguments["category"]
+
+                # 3. 객체나 딕셔너리 내부 속성에서 추출
+                if not extracted_category:
+                    for arg in bound_args.arguments.values():
+                        if isinstance(arg, dict):
+                            extracted_category = arg.get("category")
+                        elif hasattr(arg, "category"):
+                            extracted_category = getattr(arg, "category")
+                        if extracted_category:
+                            break
+            category_info = (
+                f", category={extracted_category}" if extracted_category else ""
+            )
 
             # 초기 메모리 사용량
             if include_memory:
@@ -114,7 +136,7 @@ def log_performance(operation_name: Optional[str] = None, include_memory: bool =
 
                 # 성능 정보 로깅
                 logger.info(
-                    f"PERF: {op_name} completed in {elapsed}s [userId={user_id}{result_info}{memory_info}]"
+                    f"PERF: {op_name} completed in {elapsed}s [userId={user_id}{category_info}{result_info}{memory_info}]"
                 )
 
                 # 메트릭 저장
@@ -128,7 +150,7 @@ def log_performance(operation_name: Optional[str] = None, include_memory: bool =
                 # 오류 정보 로깅
                 error_type = type(e).__name__
                 logger.error(
-                    f"PERF-ERROR: {op_name} failed after {elapsed}s [userId={user_id}, error_type={error_type}]"
+                    f"PERF-ERROR: {op_name} failed after {elapsed}s [userId={user_id}{category_info}, error_type={error_type}]"
                 )
 
                 # 오류 카운트 증가
@@ -170,7 +192,28 @@ def log_performance(operation_name: Optional[str] = None, include_memory: bool =
                         break
 
             user_id = str(user_id) if user_id is not None else "unknown"
+            # 카테고리 추출 시도 (파라미터로 지정된 경우 우선 사용)
+            extracted_category = None
+            if not extracted_category:
+                # 1. kwargs에서 직접 추출
+                extracted_category = kwargs.get("category")
 
+                # 2. bound_args에서 category 파라미터 추출
+                if not extracted_category and "category" in bound_args.arguments:
+                    extracted_category = bound_args.arguments["category"]
+
+                # 3. 객체나 딕셔너리 내부 속성에서 추출
+                if not extracted_category:
+                    for arg in bound_args.arguments.values():
+                        if isinstance(arg, dict):
+                            extracted_category = arg.get("category")
+                        elif hasattr(arg, "category"):
+                            extracted_category = getattr(arg, "category")
+                        if extracted_category:
+                            break
+            category_info = (
+                f", category={extracted_category}" if extracted_category else ""
+            )
             # 초기 메모리 사용량
             if include_memory:
                 initial_memory = _get_memory_usage()
@@ -203,7 +246,7 @@ def log_performance(operation_name: Optional[str] = None, include_memory: bool =
                     )
                 # 성능 정보 로깅
                 logger.info(
-                    f"PERF: {op_name} completed in {elapsed}s [userId={user_id}{result_info}{memory_info}]"
+                    f"PERF: {op_name} completed in {elapsed}s [userId={user_id}{category_info}{result_info}{memory_info}]"
                 )
 
                 # 메트릭 저장
@@ -217,7 +260,7 @@ def log_performance(operation_name: Optional[str] = None, include_memory: bool =
                 # 오류 정보 로깅
                 error_type = type(e).__name__
                 logger.error(
-                    f"PERF-ERROR: {op_name} failed after {elapsed}s [userId={user_id}, error_type={error_type}]"
+                    f"PERF-ERROR: {op_name} failed after {elapsed}s [userId={user_id}{category_info}, error_type={error_type}]"
                 )
 
                 # 오류 카운트 증가

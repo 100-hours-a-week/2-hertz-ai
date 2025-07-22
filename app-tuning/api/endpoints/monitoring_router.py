@@ -15,7 +15,9 @@ class PerformanceRouter:
 
     def __init__(self):
         # 라우터 생성
-        self.router = APIRouter(prefix="/monitoring", tags=["monitoring"])
+        self.router = APIRouter(
+            prefix="/monitoring", tags=["monitoring(내부 로그 확인용)"]
+        )
         # 엔드포인트 등록 (/monitoring/performance-summary)
         self.router.add_api_route(
             "/performance-summary",

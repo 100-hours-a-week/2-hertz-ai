@@ -1,0 +1,45 @@
+FROM python:3.10-slim
+
+# 작업 디렉토리 지정
+WORKDIR /app
+
+# 필수 시스템 패키지 설치 및 캐시 제거
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libsqlite3-dev libjemalloc2 libjemalloc-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# pip 최신화 및 빌드 도구 설치 (실패율↓, 설치속도↑)
+RUN pip install --upgrade pip setuptools wheel
+
+# requirements-base.txt만 복사 (캐시 최대 활용)
+COPY ./app-chat-report/requirements.txt /app/requirements-base.txt
+
+# 의존성 설치 (최소 requirements만)
+RUN pip install --no-cache-dir -r /app/requirements-base.txt
+
+# 앱 소스 복사 (최대한 마지막에! 코드 변경 시 캐시 최대화)
+COPY ./app-chat-report /app
+
+# 모델 캐시 폴더, 기타 필요시만 생성
+RUN mkdir -p /app/model-cache
+
+# 환경변수 설정 (한 번에, 중복 없이!)
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
+    PORT=8000 \
+    OMP_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 \
+    NUMEXPR_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2 \
+    ENVIRONMENT=prod \
+    ALLOW_RESET=false \
+    MODEL_NAME=jinkyeongk/kcELECTRA-toxic-detector \
+    KCELECTRA_BASE_HOME=./model-cache \
+    MONGODB_DB_NAME=monitoring_db \
+    MONGODB_DB_NAME_DEV=monitoring_db_dev 
+
+EXPOSE 8000
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

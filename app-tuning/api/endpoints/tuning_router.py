@@ -4,10 +4,9 @@
 /api 요청을 처리하고, 비즈니스 로직 실행을 위해 컨트롤러와 연결
 """
 
+from api.controllers import tuning_controller
 from fastapi import APIRouter, Query
 from schemas.tuning_schema import TuningResponse
-
-from ..controllers import tuning_controller
 
 
 class TuningRouter:
@@ -18,14 +17,23 @@ class TuningRouter:
 
     def __init__(self):
         # 라우터 생성
-        self.router = APIRouter(prefix="/api", tags=["tuning"])
-        # 엔드포인트 등록 (/api/v1/tuning)
-        self.router.add_api_route(
-            "/v1/tuning",
+        self.router_v1 = APIRouter(prefix="/api/v1", tags=["v1"])
+        self.router_v3 = APIRouter(prefix="/api/v3", tags=["v3"])
+        # 엔드포인트 등록
+        self.router_v1.add_api_route(
+            "/tuning",
             self.get_tuning,
             methods=["GET"],
             response_model=TuningResponse,
             summary="튜닝(추천) 리스트 조회",
+            description="해당 사용자 정보를 기반으로 가장 매칭 확률이 높은 유저 리스트를 조회합니다.",
+        )
+        self.router_v3.add_api_route(
+            "/tuning",
+            self.get_tuning_by_category,
+            methods=["GET"],
+            response_model=TuningResponse,
+            summary="카테고리별 튜닝(추천) 리스트 조회",
             description="해당 사용자 정보를 기반으로 가장 매칭 확률이 높은 유저 리스트를 조회합니다.",
         )
 
@@ -35,27 +43,13 @@ class TuningRouter:
             ..., alias="userId", description="매칭할 사용자의 ID", gt=0
         ),
     ) -> TuningResponse:
-        """
-        사용자 ID 기반 매칭 추천 제공
-
-        - **user_id**: 매칭을 요청한 사용자의 ID (gt: 1 이상의 정수)
-
-        **응답 예시**:
-        ```json
-        {
-          "code": "TUNING_SUCCESS",
-          "data": {
-            "userIdList": [30, 1, 5, 6, 99, 56]
-          }
-        }
-        ```
-
-        매칭 결과가 없는 경우:
-        ```json
-        {
-          "code": "TUNING_SUCCESS_BUT_NO_MATCH",
-          "data": null
-        }
-        ```
-        """
         return await tuning_controller.get_tuning_matches(user_id)
+
+    async def get_tuning_by_category(
+        self,
+        user_id: int = Query(
+            ..., alias="userId", description="매칭할 사용자의 ID", gt=0
+        ),
+        category: str = Query(..., description="카테고리 (v3용 파라미터)"),
+    ) -> TuningResponse:
+        return await tuning_controller.get_tuning_matches_by_category(user_id, category)

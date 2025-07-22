@@ -5,10 +5,20 @@
 
 import logging
 
-from core.vector_database import list_similarities, list_users, reset_collections
+from core.vector_database import (
+    get_similarities,
+    list_similarities,
+    list_users,
+    reset_collections,
+)
 from fastapi import HTTPException
 from schemas.user_schema import BaseResponse, EmbeddingRegister
-from services.user_service import delete_user_metatdata, register_user
+from services.user_service import (
+    delete_user_metatdata,
+    delete_user_metatdata_v3,
+    register_user,
+    register_user_v3,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +47,61 @@ async def db_similarity_list():
     }
 
 
+async def db_similarity_list_v3(category: str):
+    result = await get_similarities(category)
+    return {
+        "code": "REGISTERD_SIMILARITY_CHECKED",
+        "data": {
+            "collection_name": category,
+            "ids": result.get("ids", []),
+            "count": len(result.get("ids", [])),
+            "metadatas": (result.get("metadatas", [])),
+        },
+    }
+
+
 async def db_reset_data():
-    reset_collections()  # 동기 함수이므로 await 필요 없음
+    reset_collections()
     return BaseResponse(status="success", code="CHROMADB_RESET_SUCCESS")
+
+
+async def create_user_v3(user_data: EmbeddingRegister) -> BaseResponse:
+    try:
+        await register_user_v3(user_data)
+        return BaseResponse(code="EMBEDDING_REGISTER_SUCCESS", data=None)
+    except HTTPException as http_ex:
+        logger.warning(f"[REGISTER_USER_HTTP_ERROR] {http_ex.detail}")
+        raise
+    except Exception as e:
+        logger.exception(
+            f"[REGISTER_USER_FATAL_ERROR]: {str(e)}"
+        )  # 자동 traceback 포함
+        raise HTTPException(
+            status_code=500,
+            detail=BaseResponse(
+                code="EMBEDDING_REGISTER_SERVER_ERROR", data=None
+            ).model_dump(),
+        )
+
+
+async def delete_user_data_v3(user_id: int) -> BaseResponse:
+    try:
+        delete_user_metatdata_v3(user_id)
+        return BaseResponse(code="EMBEDDING_DELETE_SUCCESS", data=None)
+    except HTTPException as http_ex:
+        logger.warning(f"[EMBEDDING_DELETE_HTTP_ERROR] {http_ex.detail}")
+        raise
+    except Exception as e:
+        logger.exception(f"[EMBEDDING_DELETE_FATAL_ERROR]: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=BaseResponse(
+                code="EMBEDDING_DELETE_SERVER_ERROR", data=None
+            ).model_dump(),
+        )
+
+
+# -------------------- 아래는 기존 버전----------------------
 
 
 async def create_user(user_data: EmbeddingRegister) -> BaseResponse:

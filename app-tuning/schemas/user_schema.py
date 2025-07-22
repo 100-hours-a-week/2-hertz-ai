@@ -69,7 +69,7 @@ class EmbeddingRegister(BaseModel):
                 "religion": "NON_RELIGIOUS",
                 "smoking": "NO_SMOKING",
                 "drinking": "SOMETIMES",
-                "personality": ["KIND", "INTROVERTED"],
+                "personality": ["NICE_VOICE", "CALM"],
                 "preferredPeople": ["NICE_VOICE", "DOESNT_SWEAR", "PASSIONATE"],
                 "currentInterests": ["BAKING", "DRAWING", "PLANT_PARENTING"],
                 "favoriteFoods": ["FRUIT", "WESTERN", "STREET_FOOD"],

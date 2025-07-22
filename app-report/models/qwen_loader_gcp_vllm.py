@@ -1,4 +1,5 @@
 import time
+
 import GPUtil
 
 # from dotenv import load_dotenv
@@ -14,6 +15,7 @@ def get_vram_usage():
         return gpus[0].memoryUsed  # MB 단위
     return 0
 
+
 # 모듈 임포트 시점에 바로 모델 초기화
 @log_performance(operation_name="load_vllm_model", include_memory=True)
 def _load_model():
@@ -22,17 +24,19 @@ def _load_model():
     """
 
     try:
-        logger.info(" VLLM[Qwen2-7B-Instruct] 모델 로딩 시작...")
+        logger.info("모델 로딩 시작...")
 
         start_time = time.time()
         gpu_mem_before = get_vram_usage()
         # 모델 로드
         inference_server_url = "http://localhost:8001/v1"
+        model_name = "Qwen/Qwen2.5-7B-Instruct"
         loaded_model = ChatOpenAI(
-            model="Qwen/Qwen2.5-7B-Instruct-AWQ",
+            model=model_name,
             openai_api_key="EMPTY",
             openai_api_base=inference_server_url,
         )
+        logger.info(f"VLLM[{model_name}] 모델 로딩 완료!")
         # 모델 예열 (첫 추론 시간 단축)
         # _ = loaded_model.invoke("모델 예열용 텍스트", max_token=50, temperature=0.91)
 

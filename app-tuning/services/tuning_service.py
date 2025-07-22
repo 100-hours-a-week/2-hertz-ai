@@ -1,14 +1,16 @@
 import json
 
-from core.vector_database import get_user_similarities, get_users_data
+from core.vector_database import get_similarities, get_users_data
 from fastapi import HTTPException
 from schemas.tuning_schema import TuningResponse
 from utils import logger
 
 
 # 유사도 데이터를 가져오고 파싱하는 함수
-async def fetch_user_similarities(user_id: str) -> dict[str, float]:
-    user_similarities = await get_user_similarities(user_id)
+async def fetch_user_similarities(
+    user_id: str, category: str = "friend"
+) -> dict[str, float]:
+    user_similarities = await get_similarities(category, user_id)
 
     # 유사도 데이터가 없으면 404 에러 반환
     if not user_similarities or not user_similarities.get("metadatas"):
@@ -69,11 +71,29 @@ def format_recommendations(
     return [int(uid) for uid, _ in sorted_users if uid in metadata]
 
 
-# 전체 추천 결과를 반환하는 메인 함수
+# 전체 추천 결과를 반환하는 메인 함수 (친구 매칭 추천 only)
 @logger.log_performance(operation_name="get_matching_users", include_memory=True)
 async def get_matching_users(user_id: str) -> TuningResponse:
     # 유사도 정보 가져오기
     similarities = await fetch_user_similarities(str(user_id))
+
+    # 유사도에 포함된 유저 ID만 추출
+    user_ids = list(similarities.keys())
+
+    # 해당 유저들의 메타데이터 조회
+    metadata = await fetch_users_metadata(user_ids)
+
+    # 최종적으로 추천할 유저 ID 리스트 반환
+    return format_recommendations(similarities, metadata)
+
+
+# 카테고리별(couple, friend) 추천 결과를 반환하는 메인 함수
+@logger.log_performance(
+    operation_name="get_matching_users_by_category", include_memory=True
+)
+async def get_matching_users_by_category(user_id: str, category: str) -> TuningResponse:
+    # 유사도 정보 가져오기
+    similarities = await fetch_user_similarities(str(user_id), category)
 
     # 유사도에 포함된 유저 ID만 추출
     user_ids = list(similarities.keys())

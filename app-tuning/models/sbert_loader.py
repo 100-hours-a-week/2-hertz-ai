@@ -5,88 +5,23 @@ SBERT 모델 로더 모듈
 """
 
 import os
+import subprocess
 from pathlib import Path
 
 import torch
 from sentence_transformers import SentenceTransformer
-
-# import threading
-
-
-# ----- 기존 코드 ----- #
-
-# model = SentenceTransformer("jhgan/ko-sbert-nli")
-
-# ----- 기존 코드 ----- #
-
-
-# ----- 1차 수정 코드 ----- #
-
-# # 모델 싱글톤 인스턴스
-# _model = None
-# model_lock = threading.Lock()
-
-
-# def get_model():
-#     """
-#     SBERT 모델 싱글톤 인스턴스 반환
-
-#     처음 호출 시에만 모델을 로드하고, 이후 호출에서는 이미 로드된 인스턴스 반환
-#     스레드 안전한 지연 초기화(lazy initialization) 구현
-
-#     Returns:
-#         SentenceTransformer: 초기화된 한국어 SBERT 모델 인스턴스
-#     """
-#     global _model
-
-#     if _model is not None:
-#         return _model
-
-#     with model_lock:
-#         if _model is not None:
-#             return _model
-
-#         # CPU 스레드 수 최적화
-#         torch.set_num_threads(min(4, os.cpu_count() or 4))
-
-#         # 모델 로드
-#         _model = SentenceTransformer("jhgan/ko-sbert-nli")
-
-#         # 가능하면 반정밀도(FP16) 사용
-#         if torch.cuda.is_available():
-#             _model = _model.half().to("cuda")
-#         else:
-#             # CPU 최적화
-#             _model = _model.to("cpu")
-
-#         # 모델 예열 (첫 추론 시간 단축)
-#         _ = _model.encode("모델 예열용 텍스트")
-
-#         return _model
-
-
-# # 편의를 위한 model 변수 제공 (기존 코드 호환성)
-# model = get_model()
-
-# ----- 1차 수정 코드 ----- #
-
-
-# ----- 2차 수정 코드 ----- #
+from utils.logger import logger
 
 
 # 모듈 임포트 시점에 바로 모델 초기화
 def _load_model():
+    loaded_model = None  # 이 줄 추가
     # CPU 스레드 수 최적화 - 시스템의 모든 코어 활용
     torch.set_num_threads(max(1, os.cpu_count() // 2))  # 최소 1개는 사용하도록 보장
 
-    # 모델 로드
-
-    # 기존 코드
-    # loaded_model = SentenceTransformer("jhgan/ko-sbert-nli")
-
     # 환경변수에서 모델 경로 가져오기
 
-    MODEL_NAME = "jhgan/ko-sbert-nli"
+    MODEL_NAME = "jhgan/ko-sbert-sts"
     MODEL_DIR_NAME = MODEL_NAME.replace("/", "-")
 
     # app-tuning 디렉토리 기준으로 고정
@@ -97,19 +32,40 @@ def _load_model():
         "SENTENCE_TRANSFORMERS_HOME", os.path.join(BASE_DIR, "model-cache")
     )
 
-    # 모델 최종 경로
     MODEL_PATH = Path(MODEL_CACHE) / MODEL_DIR_NAME
-
-    # 모델 경로 존재 확인
+    # 모델 경로가 존재하지 않으면 다운로드 시도
     if not MODEL_PATH.exists():
-        raise FileNotFoundError(
-            f"모델 경로가 존재하지 않습니다: {MODEL_PATH}\n"
-            f"모델을 다운로드하려면 'scripts/download_model.py'를 실행하세요."
-        )
+        logger.warning(f"모델이 존재하지 않습니다: {MODEL_PATH}")
+        logger.info("모델 다운로드를 시도합니다...")
+
+        try:
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            env = os.environ.copy()
+            env["PYTHONPATH"] = project_root + ":" + env.get("PYTHONPATH", "")
+            subprocess.run(
+                ["python", "scripts/download_model.py"],
+                cwd=project_root,
+                env=env,
+                check=True,
+            )
+            logger.info("모델 다운로드가 완료되었습니다.")
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(
+                "모델 다운로드에 실패했습니다. 스크립트를 수동으로 실행해보세요: "
+                "'python scripts/download_model.py'"
+            ) from e
+
+        # 다운로드 후 다시 존재하는지 확인
+        if not MODEL_PATH.exists():
+            raise FileNotFoundError(
+                f"모델 다운로드 후에도 경로가 존재하지 않습니다: {MODEL_PATH}"
+            )
+    else:
+        logger.info(f"모델이 이미 존재합니다: {MODEL_PATH} (다운로드 건너뜀)")
+        logger.info("SBERT 모델을 로드합니다...")
 
     # 로컬 경로에서 모델 로드
     loaded_model = SentenceTransformer(str(MODEL_PATH))
-
     # GPU가 있는 경우에만 GPU로 이동
     if torch.cuda.is_available():
         loaded_model = loaded_model.half().to("cuda")
@@ -133,6 +89,3 @@ def get_model():
         SentenceTransformer: 초기화된 한국어 SBERT 모델 인스턴스
     """
     return model
-
-
-# ----- 2차 수정 코드 ----- #

@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  # FastAPI 앱 서비스 (Dockerfile.chat-report 에서 빌드)
+  chat-report:
+    build:
+      context: . # docker-compose.yml 위치 기준 컨텍스트
+      dockerfile: Dockerfile.chat-report
+    container_name: chat-report
+    restart: always
+    ports:
+      - "8000:8000"
+    cap_add:
+      - SYS_PTRACE
+    env_file:
+      - .chat.env
+    environment:
+      IS_PERSISTENT: "TRUE"
+      UVICORN_WORKERS: "1"
+      TOKENIZERS_PARALLELISM: "false"
+    volumes:
+      - /home/deploy/app-pylibs:/app/extlibs
+      - tuning_logs:/app/logs
+      - /home/deploy/models:/app/model-cache
+    extra_hosts:
+      - "host.docker.internal:172.17.0.1"
+
+volumes:
+  tuning_logs:

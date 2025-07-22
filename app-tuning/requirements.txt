@@ -13,6 +13,7 @@ chromadb==0.4.13  # HttpClient 포함, FastAPI와 충돌 없음
 sentence-transformers==4.1.0
 scikit-learn==1.6.1
 numpy==1.26.4
+pandas==2.2.3
 
 # logger
 psutil==5.9.8

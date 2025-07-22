@@ -1,0 +1,26 @@
+# Dockerfile.prod
+ARG BASE_IMAGE_URI
+FROM ${BASE_IMAGE_URI}
+
+
+WORKDIR /app
+# 3. requirements만 먼저 복사 (캐시를 최대한 활용)
+COPY ./app-chat-report/requirements-prod.txt /app/requirements-prod.txt
+
+# 4. 의존성 설치 (requirements.txt가 변하지 않으면 캐시 사용!)
+RUN pip install --no-cache-dir -r /app/requirements-prod.txt
+
+
+ENV PYTHONPATH=/app
+ENV ENVIRONMENT=prod
+ENV ALLOW_RESET=false
+# 모델 이름
+ENV MODEL_NAME=jinkyeongk/kcELECTRA-toxic-detector
+# MODEL CACHE 경로 설정
+ENV KCELECTRA_BASE_HOME=./model-cache
+# MongoDB 연결 정보
+ENV MONGODB_DB_NAME=monitoring_db
+ENV MONGODB_DB_NAME_DEV=monitoring_db_dev
+
+EXPOSE 8000
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
