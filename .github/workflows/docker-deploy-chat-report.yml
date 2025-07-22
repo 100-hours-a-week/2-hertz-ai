@@ -184,19 +184,19 @@ jobs:
 
           if [[ "$BRANCH" == "main" ]]; then
             echo "ENV=production" >> $GITHUB_ENV
-            load_param "/global/gcp/prod/GCP_HOST_AI" HOST
-            load_param "/global/gcp/prod/GCP_INSTANCE_AI" INSTANCE
-            load_param "/global/gcp/prod/GCP_PROJECT_ID" PROJECT_ID
-            load_param "/global/gcp/prod/GCP_ZONE" ZONE
-            load_secret_to_file "/global/gcp/prod/GCP_SA_KEY" gcp-sa-key.json
+            load_param "/global/gcp/chat/GCP_HOST" HOST
+            load_param "/global/gcp/chat/GCP_INSTANCE" INSTANCE
+            load_param "/global/gcp/chat/GCP_PROJECT_ID" PROJECT_ID
+            load_param "/global/gcp/chat/GCP_ZONE" ZONE
+            load_secret_to_file "/global/gcp/chat/GCP_SA_KEY" gcp-sa-key.json
             load_param "/global/gcp/prod/MONGODB_CONNECTION_STRING" MONGODB_CONNECTION_STRING
           else
             echo "ENV=develop" >> $GITHUB_ENV
-            load_param "/global/gcp/dev/GCP_HOST_AI" HOST
-            load_param "/global/gcp/dev/GCP_INSTANCE_AI" INSTANCE
-            load_param "/global/gcp/dev/GCP_PROJECT_ID" PROJECT_ID
-            load_param "/global/gcp/dev/GCP_ZONE" ZONE
-            load_secret_to_file "/global/gcp/dev/GCP_SA_KEY" gcp-sa-key.json
+            load_param "/global/gcp/chat/GCP_HOST_TEST" HOST
+            load_param "/global/gcp/chat/GCP_INSTANCE_TEST" INSTANCE
+            load_param "/global/gcp/chat/GCP_PROJECT_ID_TEST" PROJECT_ID
+            load_param "/global/gcp/chat/GCP_ZONE_TEST" ZONE
+            load_secret_to_file "/global/gcp/chat/GCP_SA_KEY_TEST" gcp-sa-key.json
             load_param "/global/gcp/dev/MONGODB_CONNECTION_STRING" MONGODB_CONNECTION_STRING
           fi
           echo "SA_KEY<<EOF" >> $GITHUB_ENV
