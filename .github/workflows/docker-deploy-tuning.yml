@@ -315,7 +315,7 @@ jobs:
             
             #Production 환경에서는CPU 제한 3.5로 설정
             if [ "$ENV" = "production" ] || [ "$ENV" = "prod" ]; then
-              CPU_LIMIT=3.5
+              CPU_LIMIT=7.5
             else
               CPU_LIMIT=3.5
             fi
