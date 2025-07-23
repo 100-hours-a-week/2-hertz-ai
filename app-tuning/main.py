@@ -152,8 +152,8 @@ logger.info(f"Lifespan function defined: {lifespan}")
 app = FastAPI(
     title="TUNING API",
     description="조직 내부 사용자 간의 자연스럽고 부담 없는 소통을 돕는 소셜 매칭 서비스 API",
-    version="1.0.0",
-    lifespan=lifespan,
+    version="1.0.0"
+    #lifespan=lifespan,
 )
 register_exception_handlers(app)  # 반드시 포함
 
